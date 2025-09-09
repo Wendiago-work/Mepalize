@@ -1,0 +1,13 @@
+{
+    "pythonPath": "/Users/LTC/work/localized-translator/backend/.venv/bin/python3.13.7",
+    "include": [
+        "src"
+    ],
+    "extraPaths": [
+        "src"
+    ],
+    "pythonVersion": "3.13",
+    "typeCheckingMode": "basic",
+    "useLibraryCodeForTypes": true,
+    "autoImportCompletions": true
+}

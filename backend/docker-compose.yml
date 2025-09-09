@@ -1,0 +1,50 @@
+name: Localization pipeline
+services:
+  # Qdrant vector database for embeddings
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: translation_qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      QDRANT__SERVICE__HTTP_PORT: 6333
+      QDRANT__SERVICE__GRPC_PORT: 6334
+    healthcheck:
+      test: ["CMD", "timeout", "5", "bash", "-c", "echo > /dev/tcp/localhost/6333"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - translation_network
+
+  # FastAPI application
+  api:
+    build: .
+    container_name: translation_api
+    ports:
+      - "8000:8000"
+    environment:
+      - UVICORN_WORKERS=2
+      - TRANSLATION_QDRANT_HOST=qdrant
+      - TRANSLATION_QDRANT_PORT=6333
+      - TRANSLATION_QDRANT_COLLECTION_NAME=translation_embeddings
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - translation_network
+    volumes:
+      - ./audit:/app/audit
+
+volumes:
+  qdrant_data:
+    driver: local
+
+networks:
+  translation_network:
+    driver: bridge

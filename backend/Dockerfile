@@ -1,0 +1,44 @@
+FROM python:3.13-slim
+
+# Install system dependencies for OpenCV headless and ONNXRuntime
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgomp1 \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgthread-2.0-0 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy requirements and install dependencies
+COPY pyproject.toml ./
+RUN pip install --no-cache-dir uv && \
+    uv pip install --system --no-cache -e . && \
+    pip uninstall -y opencv-python -y && \
+    pip install --no-cache-dir --force-reinstall opencv-python-headless==4.11.0.86
+
+# ---- Warm up RapidOCR models during build (no cold start in prod) ----
+# Note: Warmup disabled due to OpenCV GUI dependencies in container
+# Models will be downloaded on first use
+
+# Copy application code
+COPY . .
+
+# Set environment variables
+ENV UVICORN_WORKERS=2
+ENV PYTHONPATH=/app
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:8000/health || exit 1
+
+# Start the application
+# Note: MongoDB connection should be provided via environment variables
+# or configuration file for cloud MongoDB integration
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
