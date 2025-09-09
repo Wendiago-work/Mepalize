@@ -31,8 +31,6 @@ class Settings(BaseSettings):
     # Database Settings - MongoDB
     mongo_connection_string: str = Field(default="mongodb://localhost:27017", env="TRANSLATION_MONGO_CONNECTION_STRING")
     mongo_database: str = Field(default="LocalizationDB", env="TRANSLATION_MONGO_DATABASE")
-    mongo_user_username: Optional[str] = Field(default=None, env="MONGO_USER_USERNAME")
-    mongo_user_password: Optional[str] = Field(default=None, env="MONGO_USER_PASSWORD")
             
     # Gemini Settings
     gemini_api_key: str = Field(default="your_gemini_api_key_here", env="TRANSLATION_GEMINI_API_KEY")

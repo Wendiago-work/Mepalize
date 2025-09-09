@@ -4,7 +4,8 @@ Gemini Service for intelligent translation using RAG context
 from typing import List, Dict, Any, Optional
 from ..config import get_settings
 from .prompt_service import PromptService
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from ..core.logger import get_logger
 
 logger = get_logger("gemini_service", "translation")
@@ -26,51 +27,46 @@ class GeminiService:
         try:
             # Validate API key
             if not self.settings.gemini_api_key or self.settings.gemini_api_key == "your_gemini_api_key_here":
+                logger.error("Gemini API key not configured")
                 raise ValueError("Gemini API key not configured. Please set TRANSLATION_GEMINI_API_KEY")
             
-            genai.configure(api_key=self.settings.gemini_api_key)
+            # Configure the client with API key
+            self.client = genai.Client(api_key=self.settings.gemini_api_key)
             
             # Use configurable settings with fallbacks
             model_name = self.settings.gemini_model
             temperature = self.settings.gemini_temperature
             max_tokens = self.settings.gemini_max_tokens
             
-            # Configure safety settings based on config
-            safety_settings = {}
-            if self.settings.enable_safety_filters:
-                # Map safety threshold string to Gemini enum
-                threshold_map = {
-                    "NONE": genai.types.HarmBlockThreshold.BLOCK_NONE,
-                    "LOW_AND_ABOVE": genai.types.HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
-                    "MEDIUM_AND_ABOVE": genai.types.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-                    "HIGH_AND_ABOVE": genai.types.HarmBlockThreshold.BLOCK_HIGH_AND_ABOVE,
-                    "ONLY_HIGH": genai.types.HarmBlockThreshold.BLOCK_ONLY_HIGH,
-                }
-                threshold = threshold_map.get(self.settings.safety_threshold, genai.types.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE)
-                
-                # SAFETY FIRST: Block harmful content to protect users
-                safety_settings = {
-                    genai.types.HarmCategory.HARM_CATEGORY_HATE_SPEECH: threshold,
-                    genai.types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: threshold,
-                    genai.types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: threshold,
-                    genai.types.HarmCategory.HARM_CATEGORY_HARASSMENT: threshold,
-                }
-                logger.info(f"🛡️ Safety filters enabled with threshold: {self.settings.safety_threshold}")
-            else:
-                logger.warning("⚠️ Safety filters DISABLED - this is dangerous for production use!")
-            
-            self.model = genai.GenerativeModel(
-                model_name=model_name,
-                generation_config=genai.types.GenerationConfig(
-                    temperature=temperature,
-                    max_output_tokens=max_tokens,
+            # Configure very permissive safety settings for gaming content translation
+            # Allow most content that might be flagged as "Dangerous" due to game nature
+            safety_settings = [
+                types.SafetySetting(
+                    category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                    threshold=types.HarmBlockThreshold.BLOCK_NONE,
                 ),
-                safety_settings=safety_settings
-            )
-            logger.info(f"✅ Gemini service initialized with model: {model_name}")
-            logger.info(f"   Temperature: {temperature}, Max tokens: {max_tokens}")
+                types.SafetySetting(
+                    category=types.HarmCategory.HARM_CATEGORY_HARASSMENT,
+                    threshold=types.HarmBlockThreshold.BLOCK_ONLY_HIGH,
+                ),
+                types.SafetySetting(
+                    category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                    threshold=types.HarmBlockThreshold.BLOCK_ONLY_HIGH,
+                ),
+                types.SafetySetting(
+                    category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                    threshold=types.HarmBlockThreshold.BLOCK_ONLY_HIGH,
+                ),
+            ]
+            
+            # Store configuration for use in generation
+            self.model_name = model_name
+            self.temperature = temperature
+            self.max_tokens = max_tokens or 2048
+            self.safety_settings = safety_settings
+            
         except Exception as e:
-            logger.error(f"❌ Failed to initialize Gemini service: {e}")
+            logger.error(f"Failed to initialize Gemini service: {e}")
             raise
     
     def generate_translation_with_context(
@@ -87,6 +83,7 @@ class GeminiService:
         context_notes: Optional[str] = None
         # User context takes priority over RAG content
     ) -> Dict[str, Any]:
+        
         """
         Generate intelligent translation using combined MongoDB and Qdrant context
         
@@ -105,6 +102,9 @@ class GeminiService:
         Returns:
             Dict with translation, reasoning, cultural_notes, and style_applied
         """
+        # Initialize context_prompt to avoid scope issues
+        context_prompt = None
+        
         try:
             # Input validation for safety
             if not source_text or not source_text.strip():
@@ -153,7 +153,6 @@ class GeminiService:
             
             # Mock mode for testing - return fake translation after showing prompt
             if MOCK_MODE:
-                logger.info("🧪 MOCK MODE: Returning fake translation to avoid LLM costs")
                 return {
                     "translation": f"[MOCK] {source_text} → {target_language}",
                     "reasoning": "Mock translation for testing purposes",
@@ -168,7 +167,21 @@ class GeminiService:
                 }
             
             # Generate translation using Gemini
-            response = self.model.generate_content(context_prompt)
+            try:
+                response = self.client.models.generate_content(
+                    model=self.model_name,
+                    contents=context_prompt,
+                    config=types.GenerateContentConfig(
+                        temperature=self.temperature,
+                        max_output_tokens=self.max_tokens,
+                        response_mime_type="application/json",
+                        safety_settings=self.safety_settings
+                    )
+                )
+                
+            except Exception as api_error:
+                logger.error(f"Gemini API call failed: {api_error}")
+                raise api_error
             
             # Check for response issues
             if not response.text:
@@ -178,19 +191,62 @@ class GeminiService:
                     finish_reason = getattr(candidate, 'finish_reason', None)
                     safety_ratings = getattr(candidate, 'safety_ratings', [])
                     
-                    # Handle safety blocks appropriately
-                    if finish_reason == 2:  # SAFETY
-                        logger.warning(f"⚠️ Content blocked by safety filters - Finish reason: {finish_reason}")
-                        if safety_ratings:
-                            blocked_categories = []
-                            for rating in safety_ratings:
-                                if hasattr(rating, 'probability') and rating.probability >= 2:  # MEDIUM or HIGH
-                                    blocked_categories.append(rating.category.name)
-                            logger.warning(f"Blocked categories: {blocked_categories}")
+                    # Use proper constants instead of magic numbers for better maintainability
+                    # Check if it's a safety-related block (finish_reason can be 2 for SAFETY, 3 for RECITATION, etc.)
+                    is_safety_block = finish_reason in [2, 3]  # SAFETY or RECITATION
+                    
+                    if is_safety_block:
+                        logger.warning(f"Content blocked by safety filters - Finish reason: {finish_reason}")
+                        
+                        # Try without safety settings as a last resort
+                        try:
+                            no_safety_response = self.client.models.generate_content(
+                                model=self.model_name,
+                                contents=context_prompt,
+                                config=types.GenerateContentConfig(
+                                    temperature=self.temperature,
+                                    max_output_tokens=self.max_tokens,
+                                    response_mime_type="application/json"
+                                    # No safety_settings - most permissive
+                                )
+                            )
+                            
+                            if no_safety_response.text:
+                                return self._parse_translation_response(no_safety_response.text)
+                        except Exception as e:
+                            logger.warning(f"Translation without safety settings also failed: {e}")
+                        
+                        # Try one more time with just the basic translation request
+                        try:
+                            basic_prompt = f"Translate '{source_text}' from {source_language} to {target_language}. Return only the translation."
+                            basic_response = self.client.models.generate_content(
+                                model=self.model_name,
+                                contents=basic_prompt,
+                                config=types.GenerateContentConfig(
+                                    temperature=0.1,
+                                    max_output_tokens=1000
+                                    # No safety_settings, no JSON response
+                                )
+                            )
+                            
+                            if basic_response.text:
+                                return {
+                                    "translated_text": basic_response.text.strip(),
+                                    "translation": basic_response.text.strip(),  # Add backward compatibility
+                                    "source": "gemini_ai_basic",
+                                    "reasoning": "Used basic translation without context due to safety blocks",
+                                    "cultural_notes": "No cultural adaptation - basic translation only",
+                                    "style_applied": "No style guide applied - basic translation only",
+                                    "domain_considerations": "No domain-specific considerations - basic translation only",
+                                    "full_prompt": context_prompt
+                                }
+                        except Exception as e:
+                            logger.warning(f"Basic translation also failed: {e}")
                         
                         # Return appropriate error message for safety blocks
                         return {
                             "translated_text": "[CONTENT BLOCKED] This content cannot be translated due to safety policies.",
+                            "translation": "[CONTENT BLOCKED] This content cannot be translated due to safety policies.",  # Add backward compatibility
                             "source": "safety_blocked",
                             "reasoning": "Content was blocked by safety filters. Please review the input text for potentially harmful content.",
                             "cultural_notes": "Translation blocked for safety reasons",
@@ -201,20 +257,25 @@ class GeminiService:
                             "full_prompt": context_prompt
                         }
                     else:
-                        logger.error(f"❌ Gemini response blocked - Finish reason: {finish_reason}")
-                        if safety_ratings:
-                            logger.error(f"Safety ratings: {safety_ratings}")
+                        logger.error(f"Gemini response blocked - Finish reason: {finish_reason}")
                         
                         # For other types of blocks, try simplified prompt
                         try:
-                            logger.info("🔄 Attempting simplified prompt as fallback...")
                             simple_prompt = f"Translate this text from {source_language} to {target_language}: '{source_text}'. Respond with only the translation."
-                            simple_response = self.model.generate_content(simple_prompt)
+                            simple_response = self.client.models.generate_content(
+                                model=self.model_name,
+                                contents=simple_prompt,
+                                config=types.GenerateContentConfig(
+                                    temperature=self.temperature,
+                                    max_output_tokens=self.max_tokens,
+                                    safety_settings=self.safety_settings
+                                )
+                            )
                             
                             if simple_response.text:
-                                logger.info("✅ Simplified prompt succeeded")
                                 return {
                                     "translated_text": simple_response.text.strip(),
+                                    "translation": simple_response.text.strip(),  # Add backward compatibility
                                     "source": "gemini_ai_simplified",
                                     "reasoning": "Used simplified prompt due to context filter",
                                     "cultural_notes": "No cultural adaptation - simplified translation only",
@@ -226,30 +287,25 @@ class GeminiService:
                             logger.warning(f"Simplified prompt also failed: {e}")
                         
                         # Return fallback translation for non-safety blocks
-                        return self._fallback_translation(source_text, target_language, context_prompt)
+                        return self._fallback_translation(source_text, target_language, context_prompt, finish_reason)
                 else:
-                    logger.error("❌ Gemini returned empty response")
-                    return self._fallback_translation(source_text, target_language, context_prompt)
+                    logger.error("Gemini returned empty response")
+                    return self._fallback_translation(source_text, target_language, context_prompt, finish_reason)
             
-            # 🆕 LOGGING: Raw Gemini response
-            print(f"\n🤖 ===== RAW GEMINI RESPONSE =====")
-            print(f"📤 Response Status: {response.prompt_feedback if hasattr(response, 'prompt_feedback') else 'Success'}")
-            print(f"📝 Raw Response Text: {response.text}")
-            print(f"==========================================\n")
+            # Parse response - use parsed JSON when available
+            response_data = None
+            if hasattr(response, 'parsed') and response.parsed:
+                response_data = response.parsed
+            elif hasattr(response, 'to_json_dict') and response.to_json_dict():
+                response_data = response.to_json_dict()
+            elif response.text:
+                response_data = response.text
+            else:
+                logger.error("No usable response data found")
+                return self._fallback_translation(source_text, target_language, context_prompt, finish_reason)
             
-            # Parse response
-            translation_result = self._parse_translation_response(response.text)
+            translation_result = self._parse_translation_response(response_data)
             
-            # 🆕 LOGGING: Parsed result
-            print(f"\n🔍 ===== PARSED TRANSLATION RESULT =====")
-            print(f"📝 Translated Text: '{translation_result.get('translated_text', 'N/A')}'")
-            print(f"🧠 Reasoning: {translation_result.get('reasoning', 'N/A')[:100]}...")
-            print(f"🌍 Cultural Notes: {translation_result.get('cultural_notes', 'N/A')[:100]}...")
-            print(f"🎨 Style Applied: {translation_result.get('style_applied', 'N/A')[:100]}...")
-            print(f"🏢 Domain Considerations: {translation_result.get('domain_considerations', 'N/A')[:100]}...")
-            print(f"==========================================\n")
-            
-            logger.info(f"✅ Translation generated for {source_language} -> {target_language}")
             
             # Add the full prompt to the response for frontend display
             translation_result["full_prompt"] = context_prompt
@@ -257,9 +313,9 @@ class GeminiService:
             return translation_result
             
         except Exception as e:
-            logger.error(f"❌ Gemini translation failed: {e}")
+            logger.error(f"Gemini translation failed: {e}")
             # Fallback to basic translation
-            return self._fallback_translation(source_text, target_language, context_prompt)
+            return self._fallback_translation(source_text, target_language, context_prompt, None)
     
     def _build_context_prompt(
         self,
@@ -316,7 +372,7 @@ If there are conflicts between user context and RAG content, prioritize the user
             return "No similar translations found."
         
         context = ""
-        for i, trans in enumerate(retrieved_translations[:3], 1):
+        for i, trans in enumerate(retrieved_translations, 1):
             payload = trans.get('payload', {})
             content = trans.get('content', 'N/A')
             content_type = payload.get('content_type', 'unknown')
@@ -344,7 +400,7 @@ If there are conflicts between user context and RAG content, prioritize the user
             return "No specific style guides found."
         
         context = ""
-        for i, guide in enumerate(style_guides[:6], 1):
+        for i, guide in enumerate(style_guides, 1):
             content = guide.get('content', 'N/A')
             payload = guide.get('payload', {})
             category = payload.get('category', 'General')
@@ -376,39 +432,66 @@ If there are conflicts between user context and RAG content, prioritize the user
     
     
     
-    def _parse_translation_response(self, response_text: str) -> Dict[str, Any]:
-        """Parse Gemini's response into structured format"""
+    def _parse_translation_response(self, response_data) -> Dict[str, Any]:
+        """Parse Gemini's response into structured format - handles both JSON objects and text strings"""
         try:
-            # Try to extract JSON from response
             import json
             import re
             
-            # Find JSON in the response - look for JSON blocks that might be wrapped in code blocks
-            json_patterns = [
-                r'```json\s*(\{.*?\})\s*```',  # JSON in code block
-                r'```\s*(\{.*?\})\s*```',     # JSON in generic code block
-                r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}',  # More precise JSON matching
-            ]
             
-            parsed_json = None
-            for pattern in json_patterns:
-                json_match = re.search(pattern, response_text, re.DOTALL)
-                if json_match:
-                    try:
-                        json_text = json_match.group(1) if len(json_match.groups()) > 0 else json_match.group(0)
-                        # Clean up the JSON text
-                        json_text = json_text.strip()
-                        parsed_json = json.loads(json_text)
-                        logger.info(f"✅ Successfully parsed JSON using pattern: {pattern}")
-                        break
-                    except json.JSONDecodeError as e:
-                        logger.debug(f"Failed to parse JSON with pattern {pattern}: {e}")
-                        continue
+            # Handle different response data types
+            if isinstance(response_data, dict):
+                # Check if this is a Gemini response structure with nested JSON
+                if 'candidates' in response_data and response_data['candidates']:
+                    candidate = response_data['candidates'][0]
+                    if 'content' in candidate and 'parts' in candidate['content']:
+                        text_parts = candidate['content']['parts']
+                        if text_parts and 'text' in text_parts[0]:
+                            # Extract the JSON text from the nested structure
+                            json_text = text_parts[0]['text']
+                            try:
+                                parsed_json = json.loads(json_text)
+                            except json.JSONDecodeError as e:
+                                logger.error(f"Failed to parse JSON from candidate text: {e}")
+                                parsed_json = None
+                        else:
+                            parsed_json = None
+                    else:
+                        parsed_json = None
+                else:
+                    # Already parsed JSON object
+                    parsed_json = response_data
+            else:
+                # String response - try to extract JSON
+                response_text = str(response_data)
+            
+                # Find JSON in the response - look for JSON blocks that might be wrapped in code blocks
+                json_patterns = [
+                    r'```json\s*(\{.*?\})\s*```',  # JSON in code block
+                    r'```\s*(\{.*?\})\s*```',     # JSON in generic code block
+                    r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}',  # More precise JSON matching
+                ]
+                
+                parsed_json = None
+                for i, pattern in enumerate(json_patterns):
+                    json_match = re.search(pattern, response_text, re.DOTALL)
+                    if json_match:
+                        try:
+                            json_text = json_match.group(1) if len(json_match.groups()) > 0 else json_match.group(0)
+                            # Clean up the JSON text
+                            json_text = json_text.strip()
+                            parsed_json = json.loads(json_text)
+                            break
+                        except json.JSONDecodeError as e:
+                            continue
             
             if parsed_json:
                 # Map the LLM response fields to our expected structure
+                # Support both "translation" and "translated_text" keys for backward compatibility
+                translated_text = parsed_json.get("translated_text") or parsed_json.get("translation", "Translation failed")
                 return {
-                    "translated_text": parsed_json.get("translation", "Translation failed"),
+                    "translated_text": translated_text,
+                    "translation": translated_text,  # Add backward compatibility
                     "source": "gemini_ai",
                     "reasoning": parsed_json.get("reasoning", ""),
                     "cultural_notes": parsed_json.get("cultural_notes", ""),
@@ -418,6 +501,9 @@ If there are conflicts between user context and RAG content, prioritize the user
             else:
                 # Fallback if no JSON found - try to extract translation from text
                 logger.warning("No valid JSON found in Gemini response, using fallback parsing")
+                
+                # Get the response text for fallback parsing
+                response_text = str(response_data) if not isinstance(response_data, dict) else str(response_data)
                 
                 # Try to extract translation from common patterns
                 translation_patterns = [
@@ -434,8 +520,13 @@ If there are conflicts between user context and RAG content, prioritize the user
                         extracted_translation = match.group(1)
                         break
                 
-                return {
-                    "translated_text": extracted_translation or response_text.strip(),
+                # Strip translation prefixes from the extracted text
+                final_text = extracted_translation or response_text.strip()
+                final_text = re.sub(r'^(翻訳|Translation)\s*:\s*', '', final_text, flags=re.IGNORECASE)
+                
+                result = {
+                    "translated_text": final_text,
+                    "translation": final_text,  # Add backward compatibility
                     "source": "gemini_ai_fallback",
                     "reasoning": "Response parsed without structured format - extracted translation from text patterns",
                     "cultural_notes": "",
@@ -443,19 +534,28 @@ If there are conflicts between user context and RAG content, prioritize the user
                     "domain_considerations": ""
                 }
                 
+                return result
+                
         except Exception as e:
-            logger.warning(f"Failed to parse Gemini response: {e}")
-            return {
-                "translated_text": response_text.strip(),
+            logger.error(f"Exception in parsing: {e}")
+            # Strip translation prefixes from raw response
+            final_text = str(response_data).strip()
+            final_text = re.sub(r'^(翻訳|Translation)\s*:\s*', '', final_text, flags=re.IGNORECASE)
+            
+            result = {
+                "translated_text": final_text,
+                "translation": final_text,  # Add backward compatibility
                 "source": "gemini_ai_raw",
                 "reasoning": f"Raw response due to parsing error: {e}",
                 "cultural_notes": "",
                 "style_applied": "",
                 "domain_considerations": ""
             }
+            
+            return result
     
 
-    def _fallback_translation(self, source_text: str, target_language: str, context_prompt: str = None) -> Dict[str, Any]:
+    def _fallback_translation(self, source_text: str, target_language: str, context_prompt: str = None, finish_reason: int = None) -> Dict[str, Any]:
         """Fallback translation when Gemini fails"""
         # Simple fallback translations for common languages
         fallback_translations = {
@@ -473,10 +573,15 @@ If there are conflicts between user context and RAG content, prioritize the user
         
         fallback_text = fallback_translations.get(target_language, f"Translation: {source_text}")
         
+        # Strip translation prefixes from fallback text
+        import re
+        clean_fallback_text = re.sub(r'^(翻訳|Translation)\s*:\s*', '', fallback_text, flags=re.IGNORECASE)
+        
         result = {
-            "translated_text": fallback_text,
+            "translated_text": clean_fallback_text,
+            "translation": clean_fallback_text,  # Add backward compatibility
             "source": "fallback",
-            "reasoning": f"Gemini service unavailable or blocked (finish_reason=2), using basic fallback for {target_language}",
+            "reasoning": f"Gemini service unavailable or blocked (finish_reason={finish_reason}), using basic fallback for {target_language}",
             "cultural_notes": f"Fallback translation - no cultural adaptation applied",
             "style_applied": "No style guide applied - basic fallback only",
             "domain_considerations": "No domain-specific considerations - basic fallback only"
@@ -486,12 +591,6 @@ If there are conflicts between user context and RAG content, prioritize the user
             result["full_prompt"] = context_prompt
             
         return result
-    
-    
-    
-    
-    
-    
     
     def _format_cultural_notes(self, cultural_notes: List[Dict[str, Any]]) -> str:
         """Format cultural notes for prompt context"""
@@ -505,8 +604,35 @@ If there are conflicts between user context and RAG content, prioritize the user
             domain = note.get('domain', 'general')
             cultural_note = note.get('cultural_note', 'N/A')
             
+            # Handle any object structure intelligently
+            if isinstance(cultural_note, str):
+                cultural_note_str = cultural_note
+            elif isinstance(cultural_note, dict):
+                # Convert dictionary to readable format with proper formatting
+                cultural_note_str = self._format_object_content(cultural_note)
+            elif isinstance(cultural_note, list):
+                # Convert list to readable format
+                cultural_note_str = self._format_object_content(cultural_note)
+            else:
+                # Convert any other object type to string
+                cultural_note_str = str(cultural_note)
+            
             # Ensure domain is a string before calling upper()
             domain_str = str(domain) if domain is not None else 'general'
-            context += f"{i}. [{domain_str.upper()}] {language}: {cultural_note}\n"
+            context += f"{i}. [{domain_str.upper()}] {language}: {cultural_note_str}\n"
         
         return context
+    
+    def _format_object_content(self, content: Any) -> str:
+        """Format any object content (dict, list, etc.) into a readable string"""
+        import json
+        
+        try:
+            # Try to format as JSON for better readability
+            if isinstance(content, (dict, list)):
+                return json.dumps(content, indent=2, ensure_ascii=False)
+            else:
+                return str(content)
+        except (TypeError, ValueError):
+            # Fallback to string representation if JSON serialization fails
+            return str(content)

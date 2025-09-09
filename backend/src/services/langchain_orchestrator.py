@@ -160,7 +160,7 @@ class LangChainOrchestrator:
             rag_results = await self.qdrant_service.hybrid_search(
                 query_embedding=real_embedding,
                 query_text=processed_text,  # Use processed text that includes OCR results
-                limit=10,
+                limit=4,  # Total limit for both datasets combined
                 source_language=request["source_language"],
                 target_language=request["target_language"],
                 domain=request["domain"]
@@ -170,9 +170,8 @@ class LangChainOrchestrator:
             translation_memory = [r for r in rag_results if r.get("payload", {}).get("dataset") == "translation_memory"]
             glossaries = [r for r in rag_results if r.get("payload", {}).get("dataset") == "glossaries"]
             
-            # Limit results per type
-            translation_memory = translation_memory[:3]
-            glossaries = glossaries[:3]
+            # Results are already limited by the hybrid search per-dataset logic
+            # No need for additional limiting here
             
             self.logger.info(f"🔍 Context Retrieved: {len(translation_memory)} TM, {len(glossaries)} glossaries, style guide for {mongo_context.domain}, {len(mongo_context.cultural_notes)} cultural notes")
             
@@ -222,6 +221,12 @@ class LangChainOrchestrator:
             # Use processed text that includes OCR results for translation
             source_text = rag_context.get("processed_text", request["text"])
             
+            self.logger.info("🚀 ===== CALLING GEMINI SERVICE =====")
+            self.logger.info(f"📝 Source text: '{source_text}'")
+            self.logger.info(f"🌍 Language pair: {request['source_language']} → {request['target_language']}")
+            self.logger.info(f"🏢 Domain: {request.get('domain', 'general')}")
+            self.logger.info("==========================================")
+            
             response = self.gemini_service.generate_translation_with_context(
                 source_text=source_text,
                 source_language=request["source_language"],
@@ -234,6 +239,14 @@ class LangChainOrchestrator:
                 attachments=request.get("attachments", []),
                 context_notes=request.get("context_notes")
             )
+            
+            self.logger.info("✅ ===== GEMINI SERVICE RETURNED =====")
+            self.logger.info(f"📝 Response type: {type(response)}")
+            self.logger.info(f"📝 Response keys: {list(response.keys()) if isinstance(response, dict) else 'Not a dict'}")
+            if isinstance(response, dict):
+                self.logger.info(f"📝 Translated text: '{response.get('translated_text', 'N/A')}'")
+                self.logger.info(f"📝 Source: '{response.get('source', 'N/A')}'")
+            self.logger.info("==========================================")
             
             return response
             

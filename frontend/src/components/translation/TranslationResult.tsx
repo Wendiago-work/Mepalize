@@ -146,9 +146,15 @@ export function TranslationResult({
               Cultural Considerations
             </h4>
             <div className="bg-muted/30 p-3 rounded-md">
-              <p className="text-sm text-foreground leading-relaxed">
-                {result.cultural_notes}
-              </p>
+              {typeof result.cultural_notes === 'string' ? (
+                <p className="text-sm text-foreground leading-relaxed">
+                  {result.cultural_notes}
+                </p>
+              ) : (
+                <pre className="text-xs text-foreground overflow-auto max-h-96">
+                  {JSON.stringify(result.cultural_notes, null, 2)}
+                </pre>
+              )}
             </div>
           </div>
         )}

@@ -5,7 +5,7 @@ Handles style guides and cultural notes storage and retrieval
 """
 
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 from datetime import datetime
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase, AsyncIOMotorCollection
 from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
@@ -26,7 +26,7 @@ class CulturalNote(BaseModel):
     id: Optional[str] = Field(alias="_id", default=None)
     language: str
     domain: str
-    cultural_note: str
+    cultural_note: Any  # Flexible to accept any content type (string, dict, list, object, etc.)
     created_at: datetime
     updated_at: datetime
 
@@ -166,11 +166,18 @@ class MongoDBClient:
             notes = []
             
             async for doc in cursor:
+                # Handle flexible cultural_note content (any object structure)
+                cultural_note_content = doc.get("cultural_note", "")
+                
+                # Ensure we have valid content - if None or empty, use empty string
+                if cultural_note_content is None:
+                    cultural_note_content = ""
+                
                 notes.append(CulturalNote(
                     id=str(doc.get("_id")) if doc.get("_id") else None,
                     language=doc.get("language", language),
                     domain=doc.get("domain", ""),
-                    cultural_note=doc.get("cultural_note", ""),
+                    cultural_note=cultural_note_content,  # Accept any content type (string, dict, list, object, etc.)
                     created_at=doc.get("created_at", datetime.utcnow()),
                     updated_at=doc.get("updated_at", datetime.utcnow())
                 ))

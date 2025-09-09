@@ -65,6 +65,10 @@ class HybridRetrievalService:
             if domain:
                 additional_filters["domain"] = domain
             
+            # Calculate per-dataset limit to ensure we don't get too many results
+            # If we have 2 datasets and want 4 total results, we need 2 per dataset
+            per_dataset_limit = max(1, limit // 2)  # Ensure at least 1 per dataset
+            
             # Perform multi-dataset hybrid search if query_text is provided
             if query_text and self.model_manager:
                 # Generate sparse vector for hybrid search
@@ -75,7 +79,7 @@ class HybridRetrievalService:
                     query_vector=query_embedding,
                     sparse_vector=sparse_vector,
                     datasets=["translation_memory", "glossaries"],  # Only TM and glossaries in Qdrant
-                    top_k=limit,
+                    top_k=per_dataset_limit,  # Limit per dataset
                     additional_filters=additional_filters
                 )
             else:
@@ -84,7 +88,7 @@ class HybridRetrievalService:
                     query_vector=query_embedding,
                     sparse_vector=None,
                     datasets=["translation_memory", "glossaries"],  # Only TM and glossaries in Qdrant
-                    top_k=limit,
+                    top_k=per_dataset_limit,  # Limit per dataset
                     additional_filters=additional_filters
                 )
             

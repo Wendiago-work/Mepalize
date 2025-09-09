@@ -21,7 +21,13 @@ from .services.ocr_service import get_ocr_service, ocr_image_bytes, extract_text
 from .database.mongodb_client import create_mongodb_client
 from .database.qdrant_client import QdrantVectorStore
 from .core.model_manager import get_model_manager
+from .core.logger import configure_logging
 from contextlib import asynccontextmanager
+
+# Configure logging for the application
+print("🔧 Configuring logging...")
+configure_logging()
+print("✅ Logging configured successfully")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -96,13 +102,11 @@ app = FastAPI(title="Localized Translator MVP API", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
-        "http://0.0.0.0:8000",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://localhost:3000",  
         "http://127.0.0.1:3000",
+        "https://abc5c9ec90eb.ngrok-free.app"
     ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],

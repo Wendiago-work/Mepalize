@@ -689,27 +689,173 @@ class QdrantVectorStore:
                 original_error=e
             )
     
+    async def delete_by_metadata_filter(self, metadata_filter: Dict[str, Any]) -> int:
+        """
+        Delete documents by metadata filter using Qdrant client's native methods
+        
+        Args:
+            metadata_filter: Dictionary containing filter conditions
+                Example: {
+                    "dataset": "translation_memory",
+                    "domain": "Game - Music",
+                    "source_language": "en"
+                }
+        
+        Returns:
+            Number of documents deleted
+        """
+        if not self._initialized:
+            await self.initialize()
+        
+        try:
+            # Build Qdrant filter from metadata conditions using client models
+            filter_conditions = []
+            for key, value in metadata_filter.items():
+                if isinstance(value, list):
+                    # Handle list values (e.g., multiple domains)
+                    filter_conditions.append(
+                        models.FieldCondition(
+                            key=key,
+                            match=models.MatchAny(any=value)
+                        )
+                    )
+                else:
+                    # Handle single values
+                    filter_conditions.append(
+                        models.FieldCondition(
+                            key=key,
+                            match=models.MatchValue(value=value)
+                        )
+                    )
+            
+            # Create the filter using client models
+            qdrant_filter = models.Filter(must=filter_conditions)
+            
+            # First, count how many documents match the filter
+            count_result = await asyncio.to_thread(
+                self.client.count,
+                collection_name=self.collection_name,
+                count_filter=qdrant_filter
+            )
+            
+            matched_count = count_result.count if count_result else 0
+            
+            if matched_count == 0:
+                self.logger.info(f"No documents found matching filter: {metadata_filter}")
+                return 0
+            
+            # Delete documents matching the filter using client's delete method
+            delete_result = await asyncio.to_thread(
+                self.client.delete,
+                collection_name=self.collection_name,
+                points_selector=models.FilterSelector(filter=qdrant_filter),
+                wait=True
+            )
+            
+            self.logger.info(f"✅ Deleted {matched_count} documents matching filter: {metadata_filter}")
+            return matched_count
+            
+        except Exception as e:
+            error_msg = f"Failed to delete documents by metadata filter: {str(e)}"
+            self.logger.error(error_msg)
+            raise QdrantError(
+                error_msg,
+                collection_name=self.collection_name,
+                operation="delete_by_metadata_filter",
+                context={"metadata_filter": metadata_filter},
+                original_error=e
+            )
+    
+    async def delete_by_dataset(self, dataset: str) -> int:
+        """
+        Delete all documents from a specific dataset
+        
+        Args:
+            dataset: Dataset name (e.g., "translation_memory", "glossaries")
+        
+        Returns:
+            Number of documents deleted
+        """
+        return await self.delete_by_metadata_filter({"dataset": dataset})
+    
+    async def delete_by_domain(self, domain: str) -> int:
+        """
+        Delete all documents from a specific domain
+        
+        Args:
+            domain: Domain name (e.g., "Game - Music", "Entertainment")
+        
+        Returns:
+            Number of documents deleted
+        """
+        return await self.delete_by_metadata_filter({"domain": domain})
+    
+    async def delete_by_language(self, source_language: str = None, target_language: str = None) -> int:
+        """
+        Delete documents by language filters
+        
+        Args:
+            source_language: Source language code (e.g., "en", "ja")
+            target_language: Target language code (e.g., "en", "ja")
+        
+        Returns:
+            Number of documents deleted
+        """
+        filter_dict = {}
+        if source_language:
+            filter_dict["source_language"] = source_language
+        if target_language:
+            filter_dict["target_language"] = target_language
+        
+        if not filter_dict:
+            raise ValueError("At least one language filter must be provided")
+        
+        return await self.delete_by_metadata_filter(filter_dict)
+    
+    async def delete_by_file_source(self, file_source: str) -> int:
+        """
+        Delete documents from a specific file source
+        
+        Args:
+            file_source: File name or path (e.g., "JPi - Localization Ref For AI - Translation Memory.csv")
+        
+        Returns:
+            Number of documents deleted
+        """
+        return await self.delete_by_metadata_filter({"file_source": file_source})
+    
     async def clear_collection(self) -> None:
         """Clear all documents from the collection (for data refresh)"""
         try:
             if not self._initialized:
                 await self.initialize()
             
-            # Delete all points in the collection
-            await asyncio.to_thread(
-                self.client.delete,
-                collection_name=self.collection_name,
-                points_selector=rest.FilterSelector(
-                    filter=rest.Filter(
-                        must=[
-                            rest.FieldCondition(
-                                key="id",
-                                match=rest.MatchAny(any=[str(i) for i in range(1000000)])  # Large range to catch all
-                            )
-                        ]
+            # Method 1: Use Qdrant's native delete with empty filter (deletes all)
+            # This is more efficient than the large range approach
+            try:
+                await asyncio.to_thread(
+                    self.client.delete,
+                    collection_name=self.collection_name,
+                    points_selector=models.FilterSelector(
+                        filter=models.Filter()  # Empty filter matches all points
                     )
                 )
-            )
+            except Exception:
+                # Fallback: Use the large range approach if empty filter doesn't work
+                await asyncio.to_thread(
+                    self.client.delete,
+                    collection_name=self.collection_name,
+                    points_selector=models.FilterSelector(
+                        filter=models.Filter(
+                            must=[
+                                models.FieldCondition(
+                                    key="id",
+                                    match=models.MatchAny(any=[str(i) for i in range(1000000)])
+                                )
+                            ]
+                        )
+                    )
+                )
             
             self.logger.info(f"✅ Cleared collection: {self.collection_name}")
             

@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge'
 
 interface CulturalNote {
   domain: string
-  cultural_note: string
+  cultural_note: any  // Flexible to accept any content type (string, dict, list, object, etc.)
   language: string
 }
 
@@ -83,9 +83,20 @@ export function CulturalNotes({
                 {note.language.toUpperCase()}
               </span>
             </div>
-            <div className="text-sm text-foreground bg-muted/30 p-3 rounded-md">
-              {note.cultural_note}
-            </div>
+            
+            {/* Handle different content types flexibly */}
+            {typeof note.cultural_note === 'string' ? (
+              <div className="text-sm text-foreground bg-muted/30 p-3 rounded-md">
+                {note.cultural_note}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium">Cultural Note:</h4>
+                <pre className="text-xs text-foreground bg-muted/50 p-3 rounded-md overflow-auto max-h-96">
+                  {JSON.stringify(note.cultural_note, null, 2)}
+                </pre>
+              </div>
+            )}
           </div>
         ))}
         

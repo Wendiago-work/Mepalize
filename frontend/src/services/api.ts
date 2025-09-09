@@ -47,7 +47,7 @@ export interface TranslationResponse {
 
 export interface CulturalNote {
   domain: string
-  cultural_note: string
+  cultural_note: any  
   language: string
 }
 
