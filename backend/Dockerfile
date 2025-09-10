@@ -15,8 +15,9 @@ WORKDIR /app
 
 # Copy requirements and install dependencies
 COPY pyproject.toml ./
-RUN pip install --no-cache-dir -e . && \
-    pip uninstall -y opencv-python && \
+RUN pip install --no-cache-dir uv && \
+    uv pip install --system --no-cache -e . && \
+    pip uninstall -y opencv-python -y && \
     pip install --no-cache-dir --force-reinstall opencv-python-headless==4.11.0.86
 
 # ---- Warm up RapidOCR models during build (no cold start in prod) ----
