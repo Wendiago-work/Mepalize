@@ -1,5 +1,4 @@
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://127.0.0.1:8000'
-const TOKEN = import.meta.env.VITE_PROJECT_TOKEN ?? 'dev-token'
 
 export interface ImageAttachment {
   id: string
@@ -33,6 +32,7 @@ export interface TranslationResponse {
   cultural_notes?: string
   style_applied?: string
   domain_considerations?: string
+  full_prompt?: string
   rag_context?: {
     translation_memory: number
     glossaries: number
@@ -89,7 +89,6 @@ class ApiService {
       ...options,
       headers: {
         'Content-Type': 'application/json',
-        'X-Project-Token': TOKEN,
         ...options.headers,
       },
     })

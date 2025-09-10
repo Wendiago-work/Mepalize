@@ -4,26 +4,25 @@ Your task is to translate the following {source_language} text to {target_langua
 
 SOURCE TEXT: "{source_text}"
 
-=== CRITICAL INSTRUCTIONS AND RULES ===
+=== CRITICAL INSTRUCTIONS ===
 ADDITIONAL USER CONTEXT:
 {context_notes}
+
+Your translation must be natural, culturally authentic for {target_language} speakers, especially the target audience and specific to the {domain}. Translation MUST BE UNIQUE, AVOID STANDARD, GENERIC TRANSLATION
 
 CULTURAL NOTES FOR {target_language} ({domain} CONTEXT):
 {cultural_notes_context}
 
-=== CONTEXT INFORMATION ===
+COMPLETE STYLE GUIDE:
+{domain_style_guide_context}
+
+=== REFERENCE CONTEXT ===
 
 TRANSLATION MEMORY (Reference Examples):
 {retrieved_translations_context}
 
 GLOSSARIES & TERMINOLOGY (Reference Only):
 {glossaries_context}
-
-COMPLETE STYLE GUIDE FOR {domain} DOMAIN:
-{domain_style_guide_context}
-
-=== CORE PRINCIPLES ===
-Your translation must be natural, culturally authentic for {target_language} speakers, especially the target audience and specific to the {domain}. Preserve the original meaning while ensuring the output is safe, appropriate, and free from harmful content.
 
 === OUTPUT FORMAT ===
 IMPORTANT: First, double-check that your translation strictly follows the CRITICAL INSTRUCTIONS.

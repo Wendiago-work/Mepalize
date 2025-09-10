@@ -107,7 +107,7 @@ function App() {
                 <Globe className="h-6 w-6 text-primary-foreground" />
               </div>
               <div>
-                <CardTitle className="text-xl">Localized Translator</CardTitle>
+                <CardTitle className="text-xl">Mepalize</CardTitle>
                 <p className="text-sm text-muted-foreground">AI-powered translation with cultural context</p>
               </div>
             </div>

@@ -6,11 +6,11 @@ An AI-powered translation system with cultural context awareness, built using RA
 
 ### System Components
 
-```
+```text
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Frontend      │    │   Backend API   │    │   Databases     │
-│   (React/Vite)  │◄──►│   (FastAPI)     │◄──►│   MongoDB       │
-│                 │    │                 │    │   Qdrant        │
+│   Frontend      │    │   Backend API   │    │   Cloud Services│
+│   (React/Vite)  │◄──►│   (FastAPI)     │◄──►│   MongoDB Atlas │
+│                 │    │                 │    │   Qdrant Cloud  │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
                                 │
                                 ▼
@@ -24,6 +24,7 @@ An AI-powered translation system with cultural context awareness, built using RA
 ### Core Architecture
 
 #### 1. **Frontend (React + TypeScript)**
+
 - **Framework**: React 19 with Vite
 - **UI Library**: Radix UI components with Tailwind CSS
 - **State Management**: React hooks
@@ -35,6 +36,7 @@ An AI-powered translation system with cultural context awareness, built using RA
   - Style guide integration
 
 #### 2. **Backend API (FastAPI + Python)**
+
 - **Framework**: FastAPI with Uvicorn
 - **Architecture**: LangChain-based orchestration
 - **Key Services**:
@@ -48,11 +50,13 @@ An AI-powered translation system with cultural context awareness, built using RA
 #### 3. **Database Layer**
 
 **MongoDB**:
+
 - Stores structured data (style guides, cultural notes)
 - Collections: `style_guides`, `cultural_notes`
 - Used for domain-specific context and cultural adaptation
 
 **Qdrant Vector Database**:
+
 - Stores embeddings for semantic search
 - Collections: `translation_embeddings`
 - Handles translation memory and glossaries
@@ -61,16 +65,19 @@ An AI-powered translation system with cultural context awareness, built using RA
 #### 4. **AI/ML Services**
 
 **Google Gemini Pro**:
+
 - Primary translation engine
 - Handles multi-modal input (text + images)
 - Safety filtering and content moderation
 
 **Embedding Models**:
+
 - `intfloat/multilingual-e5-large`: Dense embeddings
 - `prithvida/Splade_PP_en_v1`: Sparse embeddings
 - `cross-encoder/ms-marco-MiniLM-L-12-v2`: Reranking
 
 **OCR Engine**:
+
 - RapidOCR with ONNX Runtime
 - Supports multiple languages including CJK
 - Handles vertical text detection
@@ -109,37 +116,31 @@ An AI-powered translation system with cultural context awareness, built using RA
 ### Prerequisites
 
 - **Docker & Docker Compose**: For containerized deployment
-- **Python 3.13+**: For backend development
-- **Node.js 18+**: For frontend development
-- **MongoDB**: Database for structured data
-- **Qdrant**: Vector database for embeddings
+- **MongoDB Atlas**: Cloud database for structured data (free tier available)
+- **Qdrant Cloud**: Cloud vector database for embeddings (free tier available)
+- **Google Gemini API Key**: For AI translation services (free tier available)
 
 ### Environment Variables
 
 #### Backend Configuration
 
 ```bash
-# Database Configuration
-TRANSLATION_MONGO_CONNECTION_STRING=mongodb://localhost:27017
+# =============================================================================
+# REQUIRED CLOUD CREDENTIALS (Only 4 variables needed!)
+# =============================================================================
+
+# MongoDB Atlas 
+TRANSLATION_MONGO_CONNECTION_STRING=your_mongodb_atlas_connection_string
+
+# Qdrant Cloud 
+TRANSLATION_QDRANT_CLOUD_URL=your_qdrant_cloud_url
+TRANSLATION_QDRANT_CLOUD_API_KEY=your_qdrant_api_key
+
+# Google Gemini 
+TRANSLATION_GEMINI_API_KEY=your_gemini_api_key
+
 TRANSLATION_MONGO_DATABASE=LocalizationDB
-
-# Qdrant Configuration
-TRANSLATION_QDRANT_HOST=localhost
-TRANSLATION_QDRANT_PORT=6333
 TRANSLATION_QDRANT_COLLECTION_NAME=translation_embeddings
-
-# Gemini AI Configuration
-TRANSLATION_GEMINI_API_KEY=your_gemini_api_key_here
-TRANSLATION_GEMINI_MODEL=gemini-2.5-pro
-TRANSLATION_GEMINI_TEMPERATURE=0.1
-TRANSLATION_GEMINI_MAX_TOKENS=4000
-
-# Safety Configuration
-TRANSLATION_ENABLE_SAFETY_FILTERS=true
-TRANSLATION_SAFETY_THRESHOLD=MEDIUM_AND_ABOVE
-
-# Performance Configuration
-UVICORN_WORKERS=2
 ```
 
 #### Frontend Configuration
@@ -147,7 +148,6 @@ UVICORN_WORKERS=2
 ```bash
 # API Configuration
 VITE_API_BASE=http://localhost:8000
-VITE_PROJECT_TOKEN=dev-token
 ```
 
 ### Database Setup
@@ -211,74 +211,142 @@ VITE_PROJECT_TOKEN=dev-token
 
 ### Deployment Options
 
-#### Option 1: Docker Compose (Recommended)
+#### Quick Start (Docker Compose)
 
 ```bash
-# Clone repository
+# 1. Clone repository
 git clone <repository-url>
 cd localized-translator
 
-# Set environment variables
+# 2. Set up cloud credentials
 cp .env.example .env
-# Edit .env with your configuration
+# Edit .env with your MongoDB Atlas and Qdrant Cloud credentials
 
-# Start services
+# 3. Start the application
 docker-compose up -d
 
-# Services will be available at:
-# - Frontend: http://localhost:5173
-# - Backend API: http://localhost:8000
-# - Qdrant: http://localhost:6333
+# 4. Access the application
+# Frontend: http://localhost:5173
+# Backend API: http://localhost:8000
 ```
 
-#### Option 2: Manual Deployment
+#### Local Development
 
 **Backend Setup**:
+
 ```bash
 cd backend
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -e .
-uvicorn src.main:app --host 0.0.0.0 --port 8000
+# Create virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install dependencies using uv
+pip install uv
+uv pip install -e .
+
+# Set up cloud credentials
+cp .env.example .env
+# Edit .env with your MongoDB Atlas and Qdrant Cloud credentials
+
+# Run the application
+uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 **Frontend Setup**:
+
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-**Database Setup**:
-```bash
-# Start MongoDB
-mongod --dbpath /path/to/data
+**Required Cloud Services** (All free tiers available):
 
-# Start Qdrant
-docker run -p 6333:6333 qdrant/qdrant:latest
+- **MongoDB Atlas**: Free forever tier with 512MB storage
+- **Qdrant Cloud**: Free tier with 1GB storage
+- **Google Gemini**: Free tier with generous usage limits
+
+#### Development with Public URLs
+
+Use the provided script for local development with public URLs:
+
+```bash
+# Make sure both frontend and backend are running
+# Frontend: npm run dev (port 5173)
+# Backend: uvicorn src.main:app --reload (port 8000)
+
+# Run the tunnel script
+./run-local.sh
 ```
+
+This will create public URLs for both services using LocalTunnel.
+
+### Quick Setup Guide
+
+#### 1. Get Free Cloud Credentials
+
+**MongoDB Atlas** (Free forever tier):
+
+1. Go to [MongoDB Atlas](https://www.mongodb.com/atlas)
+2. Create a free cluster
+3. Get your connection string
+
+**Qdrant Cloud** (Free tier available):
+
+1. Go to [Qdrant Cloud](https://cloud.qdrant.io/)
+2. Create a free cluster
+3. Get your URL and API key
+
+**Google Gemini** (Free tier available):
+
+1. Go to [Google AI Studio](https://aistudio.google.com/)
+2. Create an API key
+
+#### 2. Deploy
+
+```bash
+# Clone and setup
+git clone <repository-url>
+cd localized-translator
+cp .env.example .env
+
+# Edit .env with your cloud credentials
+# TRANSLATION_MONGO_CONNECTION_STRING=your_mongodb_atlas_string
+# TRANSLATION_QDRANT_CLOUD_URL=your_qdrant_url
+# TRANSLATION_QDRANT_CLOUD_API_KEY=your_qdrant_key
+# TRANSLATION_GEMINI_API_KEY=your_gemini_key
+
+# Start the application
+docker-compose up -d
+```
+
+That's it! Your translation service will be running at `http://localhost:5173`
 
 ### Production Considerations
 
 #### Security
+
 - Set strong API keys and database credentials
 - Enable HTTPS in production
 - Configure CORS properly
 - Use environment-specific configuration files
 
 #### Performance
+
 - Configure appropriate worker counts
 - Set up database connection pooling
 - Enable model caching
 - Monitor resource usage
 
 #### Monitoring
+
 - Set up logging aggregation
 - Monitor API response times
 - Track translation quality metrics
 - Database performance monitoring
 
 #### Scaling
+
 - Use load balancers for multiple API instances
 - Consider database sharding for large datasets
 - Implement caching layers
@@ -287,33 +355,79 @@ docker run -p 6333:6333 qdrant/qdrant:latest
 ### API Endpoints
 
 #### Core Translation
-- `POST /chat/translate` - Main translation endpoint
-- `POST /runs/translate` - Background translation processing
+
+- `POST /chat/translate` - Main translation endpoint with OCR support
+- `POST /runs/translate` - Background translation processing (requires X-Project-Token header)
 - `GET /runs/{run_id}` - Check translation status
 
+#### Chat Sessions
+
+- `GET /chat/sessions` - List all active chat sessions
+- `GET /chat/sessions/{session_id}` - Get specific chat session information
+
 #### Context Management
-- `GET /context/cultural-notes/{language}` - Get cultural notes
-- `GET /context/style-guide/{domain}` - Get style guide
+
+- `GET /context/cultural-notes/{language}` - Get cultural notes for specific language
+- `GET /context/style-guide/{domain}` - Get style guide for specific domain
 - `GET /context/domains` - List available domains
 - `GET /context/languages` - List supported languages
 
 #### OCR Services
-- `POST /ocr` - Extract text from uploaded images
-- `POST /ocr/base64` - Extract text from base64 images
 
-#### System Health
-- `GET /health` - System health check
-- `GET /data/summary` - Database statistics
-- `GET /orchestrator/stats` - Pipeline statistics
+- `POST /ocr` - Extract text from uploaded images (multipart/form-data)
+- `POST /ocr/base64` - Extract text from base64-encoded images
+
+#### System Health & Monitoring
+
+- `GET /health` - System health check with service status
+- `GET /data/summary` - Database statistics (MongoDB + Qdrant)
+- `GET /orchestrator/stats` - LangChain orchestrator pipeline statistics
+
+#### Root
+
+- `GET /` - Serves static frontend or API documentation
 
 ### Data Ingestion
 
-The system supports various data formats for knowledge base population:
+The system includes comprehensive data ingestion capabilities for populating the knowledge base:
 
+#### Available Data Sources
+
+The `backend/data/` directory contains pre-processed CSV files with localization data:
+
+- **Cultural Notes**: `Cultural Notes - All Languages.csv` - Cultural context for different languages
+- **Style Guides**: `FRi - Localization Ref For AI - Style Guide.csv` - Writing style guidelines
+- **Translation Memory**: `JPi - Localization Ref For AI - Translation Memory.csv` - Historical translations
+- **Glossaries**: Domain-specific glossaries for different game types:
+  - `Glossary - Game - Music - *.csv` (EN, FR, JA)
+  - `Glossary - Game - Casual - *.csv` (EN, FR, JA)
+  - `Glossary - Entertainment - *.csv` (EN, FR, JA)
+
+#### Data Ingestion Pipeline
+
+The system provides several ingestion scripts:
+
+```bash
+# Import data to MongoDB
+cd backend
+python import_data_to_mongodb.py
+
+# Import data to Qdrant vector database
+python ingest_qdrant_only.py
+
+# Run complete data ingestion pipeline
+python data_ingestion_pipeline.py
+
+# Migrate to Qdrant Cloud
+python migrate_to_qdrant_cloud.py
+```
+
+#### Supported Data Formats
+
+- **CSV**: Primary format for structured localization data
 - **PDF, DOCX, HTML**: Document processing with Docling
-- **CSV, XLSX**: Structured data import
 - **JSON**: Direct data import
-- **Images**: OCR text extraction
+- **Images**: OCR text extraction with RapidOCR
 
 ### Model Management
 
@@ -330,37 +444,88 @@ Models are cached locally and downloaded on first use.
 
 ### Project Structure
 
-```
+```text
 localized-translator/
 ├── backend/
 │   ├── src/
 │   │   ├── config/          # Configuration management
-│   │   ├── core/            # Core utilities and types
-│   │   ├── database/        # Database clients
-│   │   ├── services/        # Business logic services
+│   │   ├── core/            # Core utilities, types, and model management
+│   │   ├── database/        # MongoDB and Qdrant clients
+│   │   ├── services/        # Business logic services (OCR, Gemini, RAG, etc.)
 │   │   ├── prompts/         # LLM prompt templates
 │   │   └── main.py          # FastAPI application
-│   ├── docker-compose.yml   # Container orchestration
-│   ├── Dockerfile          # Backend container
-│   └── pyproject.toml      # Python dependencies
+│   ├── data/               # CSV data files for ingestion
+│   │   ├── Cultural Notes - All Languages.csv
+│   │   ├── Glossary - Game - Music - *.csv
+│   │   ├── FRi - Localization Ref For AI - *.csv
+│   │   └── JPi - Localization Ref For AI - *.csv
+│   ├── audit/              # Translation audit logs
+│   ├── logs/               # Application logs
+│   ├── docker-compose.yml  # Container orchestration
+│   ├── Dockerfile         # Backend container
+│   ├── pyproject.toml     # Python dependencies (uv-based)
+│   ├── requirements.txt   # Alternative pip requirements
+│   ├── data_ingestion_pipeline.py  # Data ingestion scripts
+│   ├── import_data_to_mongodb.py   # MongoDB data import
+│   ├── ingest_qdrant_only.py      # Qdrant data import
+│   └── migrate_to_qdrant_cloud.py # Cloud migration script
 ├── frontend/
 │   ├── src/
-│   │   ├── components/      # React components
-│   │   ├── services/        # API client
-│   │   └── App.tsx         # Main application
-│   └── package.json        # Node.js dependencies
-└── README.md              # This file
+│   │   ├── components/     # React components
+│   │   │   ├── context/    # Cultural notes, style guide, prompt preview
+│   │   │   ├── translation/# Translation form, results, selectors
+│   │   │   └── ui/         # Reusable UI components
+│   │   ├── services/       # API client
+│   │   ├── lib/           # Utility functions
+│   │   └── App.tsx        # Main application
+│   ├── public/            # Static assets
+│   ├── dist/              # Built frontend
+│   ├── package.json       # Node.js dependencies
+│   └── vite.config.ts     # Vite configuration
+├── audit/                 # Shared audit directory
+├── run-local.sh          # Local development with tunnels
+└── README.md             # This file
 ```
 
 ### Key Features
 
-- **Multi-modal Translation**: Text and image input support
+- **Multi-modal Translation**: Text and image input support with OCR
 - **Cultural Context**: Domain-specific style guides and cultural notes
 - **RAG Integration**: Retrieval-augmented generation for better translations
 - **Real-time Preview**: See the complete prompt sent to the LLM
 - **Safety Filtering**: Content moderation and safety checks
-- **OCR Support**: Extract text from images in multiple languages
+- **OCR Support**: Extract text from images in multiple languages (including CJK)
 - **Hybrid Search**: Combines vector and keyword search for better retrieval
 - **Transparency**: Full prompt visibility for debugging and understanding
+- **Audit Logging**: Complete translation pipeline audit trails
+- **Cloud-Native**: Fully cloud-based with MongoDB Atlas and Qdrant Cloud
+- **Modern UI**: React 19 with Radix UI components and Tailwind CSS
+
+## Current Status
+
+### ✅ Implemented Features
+
+- Complete translation pipeline with MongoDB + Qdrant
+- OCR integration with RapidOCR
+- Cultural context and style guide integration
+- Real-time prompt preview
+- Audit logging system
+- Docker containerization
+- Local development with tunnel support
+- Data ingestion pipeline for CSV files
+
+### 🚧 Development Status
+
+- **Backend**: Fully functional with all core services
+- **Frontend**: Complete React application with modern UI
+- **Data**: Pre-loaded with localization data for testing
+- **Deployment**: Docker-ready with cloud-native architecture
+
+### 📊 Data Available
+
+- Cultural notes for multiple languages
+- Style guides for different domains
+- Translation memory and glossaries
+- Game-specific terminology (Music, Casual, Entertainment)
 
 This architecture provides a robust, scalable foundation for AI-powered translation with cultural awareness and transparency.
