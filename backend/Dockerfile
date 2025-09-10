@@ -15,9 +15,8 @@ WORKDIR /app
 
 # Copy requirements and install dependencies
 COPY pyproject.toml ./
-RUN pip install --no-cache-dir uv && \
-    uv pip install --system --no-cache -e . && \
-    pip uninstall -y opencv-python -y && \
+RUN pip install --no-cache-dir -e . && \
+    pip uninstall -y opencv-python && \
     pip install --no-cache-dir --force-reinstall opencv-python-headless==4.11.0.86
 
 # ---- Warm up RapidOCR models during build (no cold start in prod) ----
@@ -28,17 +27,18 @@ RUN pip install --no-cache-dir uv && \
 COPY . .
 
 # Set environment variables
+ENV PORT=10000
 ENV UVICORN_WORKERS=2
 ENV PYTHONPATH=/app
 
-# Expose port
-EXPOSE 8000
+# Expose port (Render uses PORT env var, default 10000)
+EXPOSE $PORT
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:8000/health || exit 1
+  CMD curl -f http://localhost:${PORT:-10000}/health || exit 1
 
 # Start the application
 # Note: MongoDB connection should be provided via environment variables
 # or configuration file for cloud MongoDB integration
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+CMD ["sh", "-c", "uvicorn src.main:app --host 0.0.0.0 --port ${PORT:-10000} --workers 2"]
