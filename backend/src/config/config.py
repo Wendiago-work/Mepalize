@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     qdrant_collection_name: str = "translation_embeddings"
     qdrant_api_key: Optional[str] = None
     
+    # Qdrant Cloud Settings
+    qdrant_cloud_url: Optional[str] = Field(default=None, env="TRANSLATION_QDRANT_CLOUD_URL")
+    qdrant_cloud_api_key: Optional[str] = Field(default=None, env="TRANSLATION_QDRANT_CLOUD_API_KEY")
+    use_qdrant_cloud: bool = Field(default=False, env="TRANSLATION_USE_QDRANT_CLOUD")
+    
     # Database Settings - MongoDB
     mongo_connection_string: str = Field(default="mongodb://localhost:27017", env="TRANSLATION_MONGO_CONNECTION_STRING")
     mongo_database: str = Field(default="LocalizationDB", env="TRANSLATION_MONGO_DATABASE")
@@ -101,7 +106,19 @@ class Settings(BaseSettings):
     @property
     def qdrant_url(self) -> str:
         """Get Qdrant connection URL"""
+        if self.use_qdrant_cloud and self.qdrant_cloud_url:
+            return self.qdrant_cloud_url
         return f"http://{self.qdrant_host}:{self.qdrant_port}"
+    
+    @property
+    def qdrant_grpc_url(self) -> str:
+        """Get Qdrant GRPC connection URL for migration tool"""
+        if self.use_qdrant_cloud and self.qdrant_cloud_url:
+            # Convert HTTPS URL to GRPC URL (replace https with grpcs, add :6334 port)
+            if self.qdrant_cloud_url.startswith("https://"):
+                return self.qdrant_cloud_url.replace("https://", "grpcs://") + ":6334"
+            return self.qdrant_cloud_url + ":6334"
+        return f"grpc://{self.qdrant_host}:6334"
 
 
 @dataclass

@@ -5,6 +5,9 @@ Your task is to translate the following {source_language} text to {target_langua
 SOURCE TEXT: "{source_text}"
 
 === CRITICAL INSTRUCTIONS AND RULES ===
+ADDITIONAL USER CONTEXT:
+{context_notes}
+
 CULTURAL NOTES FOR {target_language} ({domain} CONTEXT):
 {cultural_notes_context}
 
@@ -18,9 +21,6 @@ GLOSSARIES & TERMINOLOGY (Reference Only):
 
 COMPLETE STYLE GUIDE FOR {domain} DOMAIN:
 {domain_style_guide_context}
-
-ADDITIONAL USER CONTEXT:
-{context_notes}
 
 === CORE PRINCIPLES ===
 Your translation must be natural, culturally authentic for {target_language} speakers, especially the target audience and specific to the {domain}. Preserve the original meaning while ensuring the output is safe, appropriate, and free from harmful content.

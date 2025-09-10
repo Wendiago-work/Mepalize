@@ -84,20 +84,36 @@ class QdrantVectorStore:
         
         for attempt in range(max_retries):
             try:
-                # Create Qdrant client with explicit HTTP URL
-                qdrant_url = f"http://{self.settings.qdrant_host}:{self.settings.qdrant_port}"
-                
-                if self.settings.qdrant_api_key:
+                # Create Qdrant client with cloud or local configuration
+                if self.settings.use_qdrant_cloud and self.settings.qdrant_cloud_url:
+                    # Use Qdrant Cloud
+                    if not self.settings.qdrant_cloud_api_key:
+                        raise QdrantError(
+                            "Qdrant Cloud API key is required when using cloud mode",
+                            ErrorSeverity.CRITICAL
+                        )
                     self.client = QdrantClient(
-                        url=qdrant_url,
-                        api_key=self.settings.qdrant_api_key,
+                        url=self.settings.qdrant_cloud_url,
+                        api_key=self.settings.qdrant_cloud_api_key,
                         timeout=self.settings.connection_timeout
                     )
+                    self.logger.info(f"Using Qdrant Cloud: {self.settings.qdrant_cloud_url}")
                 else:
-                    self.client = QdrantClient(
-                        url=qdrant_url,
-                        timeout=self.settings.connection_timeout
-                    )
+                    # Use local Qdrant
+                    qdrant_url = f"http://{self.settings.qdrant_host}:{self.settings.qdrant_port}"
+                    
+                    if self.settings.qdrant_api_key:
+                        self.client = QdrantClient(
+                            url=qdrant_url,
+                            api_key=self.settings.qdrant_api_key,
+                            timeout=self.settings.connection_timeout
+                        )
+                    else:
+                        self.client = QdrantClient(
+                            url=qdrant_url,
+                            timeout=self.settings.connection_timeout
+                        )
+                    self.logger.info(f"Using local Qdrant: {qdrant_url}")
                 
                 # Test connection
                 await self._test_connection()

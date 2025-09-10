@@ -292,9 +292,9 @@ class MongoDBClient:
                 "collections": {
                     "style_guides": await self.style_guides_collection.count_documents({}),
                     "cultural_notes": await self.cultural_notes_collection.count_documents({})
-                },
-                "domains": await self.get_domains(),
-                "languages": await self.get_languages()
+                }
+                # Removed domains and languages to avoid recursive calls
+                # These can be fetched separately via /context/domains and /context/languages
             }
             
             return stats
