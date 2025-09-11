@@ -26,6 +26,7 @@ function App() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [promptResult, setPromptResult] = useState<PromptGenerationResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [currentAttachments, setCurrentAttachments] = useState<ImageAttachment[]>([])
 
   // Context state
   const [culturalNotes, setCulturalNotes] = useState<CulturalNote[]>([])
@@ -72,6 +73,9 @@ function App() {
     setIsGenerating(true)
     setError(null)
     setPromptResult(null)
+    
+    // Store current attachments for copy functionality
+    setCurrentAttachments(attachments || [])
 
     try {
       const result = await apiService.generatePromptWithImages(
@@ -93,6 +97,7 @@ function App() {
   const clearPrompt = () => {
     setPromptResult(null)
     setError(null)
+    setCurrentAttachments([])
   }
 
   return (
@@ -182,6 +187,7 @@ function App() {
               prompt={promptResult?.full_prompt || ''}
               isLoading={isGenerating}
               error={error}
+              attachments={currentAttachments}
             />
           </div>
         </div>
