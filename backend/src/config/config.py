@@ -26,6 +26,12 @@ class Settings:
         self.api_port: int = int(os.getenv("API_PORT", "8000"))
         self.api_version: str = os.getenv("API_VERSION", "v1")
         
+        # CORS Settings
+        # Set CORS_ORIGIN environment variable for single HTTPS origin
+        # Local development ports (5173, 3000) are fixed and always included
+        # Example: CORS_ORIGIN="https://mepalize.vercel.app"
+        self.cors_origins: List[str] = self._parse_cors_origins()
+        
         # Chroma DB Cloud Settings (Required)
         self.chroma_cloud_api_key: str = os.getenv("CHROMA_API_KEY", "")
         self.chroma_cloud_tenant: str = os.getenv("CHROMA_TENANT", "")
@@ -75,6 +81,26 @@ class Settings:
         
         # Local Models Flag
         self.use_local_models: bool = os.getenv("USE_LOCAL_MODELS", "false").lower() == "true"
+    
+    def _parse_cors_origins(self) -> List[str]:
+        """Parse CORS origins from environment variable"""
+        # Fixed local development origins
+        origins = [
+            "http://localhost:5173",
+            "http://127.0.0.1:5173", 
+            "http://localhost:3000",
+            "http://127.0.0.1:3000"
+        ]
+        
+        # Add single HTTPS origin from environment
+        cors_origin_env = os.getenv("CORS_ORIGIN", "")
+        if cors_origin_env and cors_origin_env.strip().startswith("https://"):
+            origins.append(cors_origin_env.strip())
+        else:
+            # Default production origin if no env var set
+            origins.append("https://mepalize.vercel.app")
+        
+        return origins
     
 @dataclass
 class RetrievalConfig:

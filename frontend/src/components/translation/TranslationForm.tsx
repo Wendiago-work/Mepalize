@@ -263,7 +263,7 @@ export function TranslationForm({
           <Textarea
             value={contextNotes}
             onChange={(e) => setContextNotes(e.target.value)}
-            placeholder="Provide additional context, tone preferences, or specific requirements..."
+            placeholder="Provide additional context, target audience, or specific requirements..."
             className="resize-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
             rows={2}
             disabled={disabled || isLoading}
@@ -306,7 +306,6 @@ export function TranslationForm({
             <li>• Text input is optional - images alone work fine</li>
             <li>• Paste images in the text box or image upload area (Ctrl+V)</li>
             <li>• Drag and drop images anywhere on this form</li>
-            <li>• Be specific about tone (formal, casual, friendly)</li>
             <li>• Mention target audience (gamers, professionals, etc.)</li>
             <li>• Press Enter to generate prompt, Shift+Enter for new line</li>
           </ul>

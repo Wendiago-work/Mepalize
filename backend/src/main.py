@@ -11,6 +11,9 @@ import uuid
 # Import types from centralized location
 from .core.types import Attachment, TranslateReq, RunStatus, RunPass, RunFail
 
+# Import config
+from .config.config import get_settings
+
 # Import services
 from .services.chroma_retrieval_service import ChromaRetrievalService
 from .services.prompt_service import PromptService
@@ -104,20 +107,17 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Localized Translator MVP API", lifespan=lifespan)
 
-# CORS for local frontend dev
+# Get settings for CORS configuration
+settings = get_settings()
+
+# CORS configuration with dynamic origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:3000",  
-        "http://127.0.0.1:3000",
-        "https://mepalize.vercel.app"
-    ],
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_origins=settings.cors_origins,
+    allow_credentials=False,
+    allow_methods=["*"],
     allow_headers=["*"],
-    allow_origin_regex=r"http://.*:(8000|5173|3000)"  # Allow common dev ports
+    allow_origin_regex=r"http://.*:(8000|5173|3000)" 
 )
 
 # Mount static files
