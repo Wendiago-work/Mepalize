@@ -1,19 +1,17 @@
 # ✅ Use a supported Python
 FROM python:3.12-slim
 
-# System deps (OpenMP, GLib; curl for healthcheck; headless OpenCV avoids libGL)
+# System deps (curl for healthcheck)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgomp1 libglib2.0-0 libsm6 libxext6 libxrender-dev libgthread-2.0-0 curl \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Dependencies (pin ORT + RapidOCR to known-good)
+# Dependencies
 COPY pyproject.toml ./
 RUN pip install --no-cache-dir uv && \
-    uv pip install --system --no-cache "onnxruntime==1.22.1" "rapidocr-onnxruntime==1.4.4" . && \
-    pip uninstall -y opencv-python && \
-    pip install --no-cache-dir --force-reinstall opencv-python-headless==4.11.0.86
+    uv pip install --system --no-cache .
 
 # App code
 COPY . .
@@ -22,12 +20,7 @@ COPY . .
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app \
-    UVICORN_WORKERS=1 \
-    # Make HF/ORT caches writable on Render (no disk) or point to your mounted disk
-    HF_HOME=/tmp/hf \
-    HUGGINGFACE_HUB_CACHE=/tmp/hf \
-    XDG_CACHE_HOME=/tmp/.cache \
-    OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+    UVICORN_WORKERS=1
 
 EXPOSE 10000
 
