@@ -231,10 +231,13 @@ async def process_translation_pipeline(run_id: str, request: TranslateReq) -> No
                         print(f"   Error details: {traceback.format_exc()}")
                         continue
             
-            # Combine original text with OCR context
+            # Keep original text separate from OCR context
+            # OCR context is used for RAG retrieval but not included in source text
+            # Images will be manually inserted into the prompt
+            processed_text = request.text
             if ocr_context:
-                processed_text = f"{request.text}{ocr_context}"
-                print(f"📝 Combined text with OCR context: {len(processed_text)} characters")
+                print(f"📝 OCR context extracted for RAG retrieval: {len(ocr_context)} characters")
+                print(f"📝 Source text kept separate: {len(processed_text)} characters")
         
         # Convert to LangChain TranslationRequest
         langchain_request = TranslationRequest(
@@ -338,8 +341,9 @@ async def post_translate(
     if not x_project_token:
         raise HTTPException(status_code=401, detail="Missing X-Project-Token")
     
-    if not req.text:
-        raise HTTPException(status_code=400, detail="Text is required for translation")
+    # Allow empty text if there are image attachments (images will be processed with OCR)
+    if not req.text and not (req.attachments and any(att.type == "image" for att in req.attachments)):
+        raise HTTPException(status_code=400, detail="Either text or image attachments are required for translation")
     
     run_id = generate_run_id()
     write_audit_stub(run_id, req.model_dump())
@@ -443,10 +447,13 @@ async def chat_translate_multipart(
                         mime_type=file.content_type
                     ))
             
-            # Combine original text with OCR context
+            # Keep original text separate from OCR context
+            # OCR context is used for RAG retrieval but not included in source text
+            # Images will be manually inserted into the prompt
+            processed_text = text
             if ocr_context:
-                processed_text = f"{text}{ocr_context}"
-                print(f"📝 Combined text with OCR context: {len(processed_text)} characters")
+                print(f"📝 OCR context extracted for RAG retrieval: {len(ocr_context)} characters")
+                print(f"📝 Source text kept separate: {len(processed_text)} characters")
         
         # Convert to LangChain TranslationRequest
         langchain_request = TranslationRequest(
