@@ -74,6 +74,9 @@ class PromptService:
                             context_notes: str = None) -> str:
         """Generate the final prompt with Chroma DB context for translation"""
         
+        # Handle empty source text
+        source_text_section = self._format_source_text_section(source_text)
+        
         # Format retrieved translations
         retrieved_translations_context = self._format_retrieved_translations(retrieved_translations)
         
@@ -91,7 +94,7 @@ class PromptService:
         
         # Format the prompt with all context
         final_prompt = prompt_template.format(
-            source_text=source_text,
+            source_text_section=source_text_section,
             source_language=source_language,
             target_language=target_language,
             domain=domain,
@@ -103,6 +106,13 @@ class PromptService:
         )
         
         return final_prompt
+    
+    def _format_source_text_section(self, source_text: str) -> str:
+        """Format the source text section, handling empty text appropriately"""
+        if not source_text or not source_text.strip():
+            return "NOTE: No source text provided. Please focus on translating any text content found in the attached images only."
+        
+        return f'SOURCE TEXT: "{source_text}"'
     
     def _format_retrieved_translations(self, retrieved_translations: list) -> str:
         """Format retrieved translation memory for prompt"""

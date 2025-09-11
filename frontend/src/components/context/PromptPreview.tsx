@@ -29,44 +29,17 @@ export function PromptPreview({
 
   const handleCopy = async () => {
     try {
-      if (attachments.length > 0) {
-        // Copy both text and images
-        await copyTextWithImages(prompt, attachments)
-      } else {
-        // Copy only text
-        await navigator.clipboard.writeText(prompt)
-      }
+      // Always copy only text
+      await navigator.clipboard.writeText(prompt)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch (err) {
       console.error('Failed to copy prompt:', err)
+      setCopied(false)
     }
   }
 
-  const copyTextWithImages = async (text: string, images: ImageAttachment[]) => {
-    try {
-      // Create a new ClipboardItem with both text and images
-      const clipboardItems = []
-      
-      // Add text as plain text
-      clipboardItems.push(new ClipboardItem({
-        'text/plain': new Blob([text], { type: 'text/plain' })
-      }))
-      
-      // Add each image
-      for (const attachment of images) {
-        clipboardItems.push(new ClipboardItem({
-          [attachment.file.type]: attachment.file
-        }))
-      }
-      
-      await navigator.clipboard.write(clipboardItems)
-    } catch (err) {
-      // Fallback to text-only copy if image copy fails
-      console.warn('Failed to copy images, falling back to text-only:', err)
-      await navigator.clipboard.writeText(text)
-    }
-  }
+
 
   if (error) {
     return (
@@ -145,7 +118,7 @@ export function PromptPreview({
             ) : (
               <>
                 <Copy className="h-3 w-3 mr-1" />
-                {attachments.length > 0 ? 'Copy + Images' : 'Copy'}
+                Copy
               </>
             )}
           </Button>
