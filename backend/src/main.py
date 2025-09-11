@@ -84,15 +84,9 @@ async def lifespan(app: FastAPI):
             context_service=context_service
         )
         
-        # Initialize OCR service and warm up models
-        ocr_service = get_ocr_service()
-        await warmup_ocr()
-        
-        # Test OCR service
-        from .services.ocr_service import test_ocr_service
-        ocr_test_result = test_ocr_service()
-        if not ocr_test_result:
-            print("⚠️ OCR service test failed - OCR may not work properly")
+        # Initialize OCR service (lazy-loaded to save memory)
+        # OCR will be initialized on first use
+        print("ℹ️ OCR service will be initialized on first use to save memory")
         
         print("✅ All services initialized successfully")
         
