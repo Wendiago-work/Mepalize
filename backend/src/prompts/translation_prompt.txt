@@ -30,11 +30,31 @@ GLOSSARIES & TERMINOLOGY (Reference Only):
 === OUTPUT FORMAT ===
 IMPORTANT: First, double-check that your translation strictly follows the CRITICAL INSTRUCTIONS.
 
+For the translation output, you must provide each text element with its source and translation(s). Structure it as an array of translation objects, where each object contains the source text and its translation(s).
+
 Then, you must respond with ONLY a valid JSON object in this exact format. Do not include any text before or after the JSON:
 
 {{
-    "translation": "your {target_language} translation here",
-    "reasoning": "Brief explanation of your translation choices."
+    "translations": [
+        {{
+            "source": "[original text element 1]",
+            "translation": "[your {target_language} translation for element 1]",
+            "alternative": "[optional alternative translation for element 1]"
+        }},
+        {{
+            "source": "[original text element 2]", 
+            "translation": "[your {target_language} translation for element 2]",
+            "alternative": "[optional alternative translation for element 2]"
+        }},
+        {{
+            "source": "[original text element 3]",
+            "translation": "[your {target_language} translation for element 3]",
+            "alternative": "[optional alternative translation for element 3]"
+        }}
+    ],
+    "reasoning": "Brief explanation of your translation choices and cultural considerations."
 }}
+
+Note: Only include translation objects for the actual text elements that need translation. The "alternative" field is optional and can be omitted if no alternative translation is needed.
 
 RESPONSE:
