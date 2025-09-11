@@ -33,9 +33,16 @@ export function TranslationForm({
   const handleSubmit = () => {
     if ((!text.trim() && attachments.length === 0) || isLoading) return
     onSubmit(text, contextNotes || undefined, attachments.length > 0 ? attachments : undefined)
+    // Keep user input visible after submission for reference
+  }
+
+  const handleClear = () => {
     setText('')
     setContextNotes('')
     setAttachments([])
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
   }
 
 
@@ -263,7 +270,16 @@ export function TranslationForm({
           />
         </div>
         
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+          <Button
+            onClick={handleClear}
+            disabled={isLoading || disabled}
+            variant="outline"
+            size="lg"
+            className="px-6"
+          >
+            Clear
+          </Button>
           <Button
             onClick={handleSubmit}
             disabled={(!text.trim() && attachments.length === 0) || isLoading || disabled}
