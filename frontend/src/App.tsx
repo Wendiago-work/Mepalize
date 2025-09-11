@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Globe, RotateCcw } from 'lucide-react'
+import { RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { ThemeToggle } from '@/components/ui/theme-toggle'
 
 // Import components
 import { LanguageSelector } from '@/components/translation/LanguageSelector'
@@ -107,12 +108,14 @@ function App() {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
-                <Globe className="h-6 w-6 text-primary-foreground" />
-              </div>
+              <img 
+                src="/src/assets/mep-logo.png" 
+                alt="Mepalize Logo" 
+                className="h-14 w-14 object-contain"
+              />
               <div>
                 <CardTitle className="text-xl">Mepalize</CardTitle>
-                <p className="text-sm text-muted-foreground">AI-powered prompt generation with cultural context</p>
+                <p className="text-sm text-muted-foreground">RAG-based prompt generator for localization</p>
               </div>
             </div>
             <div className="flex items-center space-x-2">
@@ -123,6 +126,7 @@ function App() {
                 {systemStatus === 'loading' ? 'Checking...' : 
                  systemStatus === 'healthy' ? 'System Online' : 'System Offline'}
               </Badge>
+              <ThemeToggle />
               <Button
                 variant="outline"
                 size="sm"
@@ -137,7 +141,7 @@ function App() {
       </div>
 
       {/* Configuration Panel */}
-      <div className="border-b bg-muted/30">
+      <div className="border-b">
         <div className="container mx-auto px-4 py-3">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <LanguageSelector
