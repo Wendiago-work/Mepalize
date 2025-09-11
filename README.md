@@ -17,7 +17,7 @@ An AI-powered prompt generation system with cultural context awareness, built us
                        ┌─────────────────┐
                        │   AI Services   │
                        │   Prompt Gen    │
-                       │   OCR (RapidOCR)│
+                       │   OCR (Gemini)  │
                        └─────────────────┘
 ```
 
@@ -43,7 +43,7 @@ An AI-powered prompt generation system with cultural context awareness, built us
   - **LangChain Orchestrator**: Coordinates the entire prompt generation pipeline
   - **Chroma Retrieval Service**: Handles vector search across translation memory and glossaries
   - **Context Service**: Manages MongoDB data (style guides, cultural notes)
-  - **OCR Service**: Extracts text from images using RapidOCR
+  - **OCR Service**: Extracts text from images using Google Gemini AI
   - **Prompt Service**: Generates comprehensive prompts with context
 
 #### 3. **Database Layer**
@@ -77,9 +77,13 @@ An AI-powered prompt generation system with cultural context awareness, built us
 
 **OCR Engine**:
 
-- RapidOCR with ONNX Runtime
-- Supports multiple languages including CJK
-- Handles vertical text detection
+- Google Gemini AI multimodal model
+- Cloud-based text extraction from images
+- Supports multiple languages and formats
+- High accuracy with advanced AI capabilities
+- No local model downloads or storage required
+- Faster processing and better accuracy than traditional OCR
+- Automatic language detection and text formatting
 
 ## Data Flow
 
@@ -118,6 +122,7 @@ An AI-powered prompt generation system with cultural context awareness, built us
 - **Docker & Docker Compose**: For containerized deployment
 - **MongoDB Atlas**: Cloud database for structured data (free tier available)
 - **Chroma DB Cloud**: Cloud vector database for embeddings (free tier available)
+- **Google Gemini API**: For OCR text extraction from images
 - **No external LLM required**: System generates prompts for external use
 
 ### Environment Variables
@@ -126,7 +131,7 @@ An AI-powered prompt generation system with cultural context awareness, built us
 
 ```bash
 # =============================================================================
-# REQUIRED CLOUD CREDENTIALS (Only 4 variables needed!)
+# REQUIRED CLOUD CREDENTIALS (Only 5 variables needed!)
 # =============================================================================
 
 # MongoDB Atlas 
@@ -137,6 +142,9 @@ MONGO_DATABASE=LocalizationDB
 CHROMA_API_KEY=your_chroma_api_key
 CHROMA_TENANT=your_chroma_tenant
 CHROMA_DATABASE=your_chroma_database
+
+# Google Gemini API (for OCR)
+GEMINI_API_KEY=your_gemini_api_key
 ```
 
 #### Frontend Configuration
@@ -259,6 +267,7 @@ npm run dev
 
 - **MongoDB Atlas**: Free forever tier with 512MB storage
 - **Chroma DB Cloud**: Free tier with 1GB storage
+- **Google Gemini API**: Free tier with generous usage limits
 - **No external LLM required**: System generates prompts for external use
 
 #### Development with Public URLs
@@ -292,6 +301,12 @@ This will create public URLs for both services using LocalTunnel.
 2. Create a free account
 3. Get your API key, tenant, and database name
 
+**Google Gemini API** (Free tier available):
+
+1. Go to [Google AI Studio](https://aistudio.google.com/)
+2. Create a free account
+3. Generate an API key for Gemini
+
 #### 2. Deploy
 
 ```bash
@@ -306,6 +321,7 @@ cp .env.example .env
 # CHROMA_API_KEY=your_chroma_api_key
 # CHROMA_TENANT=your_chroma_tenant
 # CHROMA_DATABASE=your_chroma_database
+# GEMINI_API_KEY=your_gemini_api_key
 
 # Start the application
 docker-compose up -d
@@ -405,7 +421,7 @@ python ingest_chroma_data.py
 The system uses Chroma DB's native embedding functions:
 
 - **No local models required**: Chroma DB handles all embeddings natively
-- **OCR Models**: RapidOCR with ONNX Runtime for image processing
+- **OCR Models**: Google Gemini AI for cloud-based image processing
 - **Automatic embedding**: Chroma DB generates and manages embeddings automatically
 
 ## Development
@@ -456,11 +472,11 @@ localized-translator/
 - **Cultural Context**: Domain-specific style guides and cultural notes
 - **RAG Integration**: Retrieval-augmented generation for comprehensive prompts
 - **Real-time Preview**: See the complete generated prompt
-- **OCR Support**: Extract text from images in multiple languages (including CJK)
+- **OCR Support**: Extract text from images using Google Gemini AI
 - **Semantic Search**: Chroma DB vector search for relevant context
 - **Transparency**: Full prompt visibility for debugging and understanding
 - **Audit Logging**: Complete prompt generation pipeline audit trails
-- **Cloud-Native**: Fully cloud-based with MongoDB Atlas and Chroma DB Cloud
+- **Cloud-Native**: Fully cloud-based with MongoDB Atlas, Chroma DB Cloud, and Google Gemini
 - **Modern UI**: React 19 with Radix UI components and Tailwind CSS
 - **No External LLM**: Generates ready-to-use prompts for external consumption
 
@@ -469,7 +485,7 @@ localized-translator/
 ### ✅ Implemented Features
 
 - Complete prompt generation pipeline with MongoDB + Chroma DB
-- OCR integration with RapidOCR
+- OCR integration with Google Gemini AI
 - Cultural context and style guide integration
 - Real-time prompt preview
 - Audit logging system
