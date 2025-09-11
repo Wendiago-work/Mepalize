@@ -293,8 +293,6 @@ class MongoDBClient:
                     "style_guides": await self.style_guides_collection.count_documents({}),
                     "cultural_notes": await self.cultural_notes_collection.count_documents({})
                 }
-                # Removed domains and languages to avoid recursive calls
-                # These can be fetched separately via /context/domains and /context/languages
             }
             
             return stats

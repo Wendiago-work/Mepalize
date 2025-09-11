@@ -76,15 +76,15 @@ class DatabaseError(BaseTranslationError):
         super().__init__(message, ErrorCategory.DATABASE, **kwargs)
 
 
-class QdrantError(DatabaseError):
-    """Qdrant-specific errors"""
+class ChromaError(DatabaseError):
+    """Chroma DB-specific errors"""
     
     def __init__(self, message: str, collection_name: Optional[str] = None,
-                 vector_id: Optional[str] = None, **kwargs):
+                 document_id: Optional[str] = None, **kwargs):
         context = kwargs.get('context', {})
         context.update({
             "collection_name": collection_name,
-            "vector_id": vector_id
+            "document_id": document_id
         })
         kwargs['context'] = context
         super().__init__(message, **kwargs)

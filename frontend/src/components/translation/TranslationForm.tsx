@@ -157,13 +157,13 @@ export function TranslationForm({
       <CardHeader className="pb-3">
         <CardTitle className="text-sm flex items-center gap-2">
           <FileText className="h-4 w-4" />
-          Translation Input
+          Prompt Generation Input
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div>
           <label className="text-xs font-medium text-muted-foreground mb-2 block">
-            Text to Translate
+            Text for Prompt Generation
           </label>
           <Textarea
             ref={textareaRef}
@@ -171,7 +171,7 @@ export function TranslationForm({
             onChange={(e) => setText(e.target.value)}
             onKeyDown={handleKeyDown}
             onPaste={handleTextareaPaste}
-            placeholder="Enter text to translate, paste images, or drag & drop images here..."
+            placeholder="Enter text to generate a prompt with context, paste images, or drag & drop images here..."
             className="resize-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
             rows={4}
             disabled={disabled || isLoading}
@@ -273,12 +273,12 @@ export function TranslationForm({
             {isLoading ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Translating...
+                Generating...
               </>
             ) : (
               <>
                 <Send className="h-4 w-4 mr-2" />
-                {attachments.length > 0 && 'Translate'}
+                Generate Prompt
               </>
             )}
           </Button>
@@ -292,7 +292,7 @@ export function TranslationForm({
             <li>• Drag and drop images anywhere on this form</li>
             <li>• Be specific about tone (formal, casual, friendly)</li>
             <li>• Mention target audience (gamers, professionals, etc.)</li>
-            <li>• Press Enter to translate, Shift+Enter for new line</li>
+            <li>• Press Enter to generate prompt, Shift+Enter for new line</li>
           </ul>
         </div>
       </CardContent>

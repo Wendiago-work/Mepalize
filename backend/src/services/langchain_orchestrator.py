@@ -14,8 +14,7 @@ import uuid
 from langchain_core.runnables import RunnableSequence, RunnablePassthrough
 
 # Local services
-from .hybrid_retrieval_service import HybridRetrievalService
-from .gemini_service import GeminiService
+from .chroma_retrieval_service import ChromaRetrievalService
 from .prompt_service import PromptService
 from .context_service import ContextService, UserConfiguration
 
@@ -63,12 +62,10 @@ class LangChainOrchestrator:
     """LangChain-based pipeline orchestrator for translation"""
     
     def __init__(self, 
-                 qdrant_service: HybridRetrievalService,
-                 gemini_service: GeminiService,
+                 retrieval_service: Optional[ChromaRetrievalService],
                  prompt_service: PromptService,
                  context_service: ContextService):
-        self.qdrant_service = qdrant_service
-        self.gemini_service = gemini_service
+        self.retrieval_service = retrieval_service
         self.prompt_service = prompt_service
         self.context_service = context_service
         self.logger = self._setup_logger()
@@ -139,14 +136,13 @@ class LangChainOrchestrator:
         return pipeline
     
     async def _retrieve_context(self, request: Dict[str, Any]) -> Dict[str, Any]:
-        """Retrieve relevant context using both MongoDB and Qdrant RAG"""
+        """Retrieve relevant context using both MongoDB and Chroma DB RAG"""
         try:
             # Use the processed text (OCR already handled in main pipeline)
             processed_text = request["text"]
             
-            from ..core.model_manager import get_model_manager
-            model_manager = get_model_manager()
-            real_embedding = model_manager.get_embedding(processed_text)
+            # Note: Embeddings are now handled by Chroma DB natively
+            # No need to generate embeddings manually
             
             # 1. Get MongoDB context (writing traits, guidelines, cultural notes)
             user_config = UserConfiguration(
@@ -156,23 +152,25 @@ class LangChainOrchestrator:
             )
             mongo_context = await self.context_service.get_context(user_config)
             
-            # 2. Get Qdrant RAG context (translation memory and glossaries)
-            rag_results = await self.qdrant_service.hybrid_search(
-                query_embedding=real_embedding,
-                query_text=processed_text,  # Use processed text that includes OCR results
-                limit=4,  # Total limit for both datasets combined
-                source_language=request["source_language"],
-                target_language=request["target_language"],
-                domain=request["domain"]
-            )
-            
-            # Filter results by dataset type
-            translation_memory = [r for r in rag_results if r.get("payload", {}).get("dataset") == "translation_memory"]
-            glossaries = [r for r in rag_results if r.get("payload", {}).get("dataset") == "glossaries"]
-            
-            # Results are already limited by the hybrid search per-dataset logic
-            # No need for additional limiting here
-            
+            # 2. Get Chroma DB RAG context (translation memory and glossaries)
+            if self.retrieval_service:
+                rag_results = await self.retrieval_service.search_collections(
+                    query=processed_text,  # Use processed text that includes OCR results
+                    top_k=4,  # Total limit for both datasets combined
+                    source_language=request["source_language"],
+                    target_language=request["target_language"],
+                    domain=request["domain"]
+                )
+                
+                # Extract results from each collection
+                translation_memory = rag_results.get("translation_memory", [])
+                glossaries = rag_results.get("glossaries", [])
+            else:
+                # No retrieval service available
+                translation_memory = []
+                glossaries = []
+                self.logger.warning("Retrieval service not available - no translation memory or glossaries will be used")
+                        
             self.logger.info(f"🔍 Context Retrieved: {len(translation_memory)} TM, {len(glossaries)} glossaries, style guide for {mongo_context.domain}, {len(mongo_context.cultural_notes)} cultural notes")
             
             return {
@@ -211,7 +209,7 @@ class LangChainOrchestrator:
     async def _generate_translation(self, 
                                   request: Dict[str, Any],
                                   rag_context: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate translation using Gemini service with combined context"""
+        """Generate final prompt with Chroma DB context"""
         try:
             # Extract context components
             translation_memory = rag_context.get("translation_memory", [])
@@ -221,34 +219,47 @@ class LangChainOrchestrator:
             # Use processed text that includes OCR results for translation
             source_text = rag_context.get("processed_text", request["text"])
             
-            self.logger.info("🚀 ===== CALLING GEMINI SERVICE =====")
+            self.logger.info("🚀 ===== GENERATING FINAL PROMPT =====")
             self.logger.info(f"📝 Source text: '{source_text}'")
             self.logger.info(f"🌍 Language pair: {request['source_language']} → {request['target_language']}")
             self.logger.info(f"🏢 Domain: {request.get('domain', 'general')}")
             self.logger.info("==========================================")
             
-            response = self.gemini_service.generate_translation_with_context(
+            # Generate final prompt using the prompt service
+            final_prompt = self.prompt_service.generate_final_prompt(
                 source_text=source_text,
                 source_language=request["source_language"],
                 target_language=request["target_language"],
-                retrieved_translations=translation_memory,
-                glossaries=glossaries,  # Glossaries from Qdrant
-                domain_style_guide=mongo_context.get("style_guide", {}),  # Complete style guide from MongoDB
-                cultural_notes=mongo_context.get("cultural_notes", []),
                 domain=request.get("domain", "general"),
-                attachments=request.get("attachments", []),
+                retrieved_translations=translation_memory,
+                glossaries=glossaries,
+                domain_style_guide=mongo_context.get("style_guide", {}),
+                cultural_notes=mongo_context.get("cultural_notes", []),
                 context_notes=request.get("context_notes")
             )
             
-            self.logger.info("✅ ===== GEMINI SERVICE RETURNED =====")
-            self.logger.info(f"📝 Response type: {type(response)}")
-            self.logger.info(f"📝 Response keys: {list(response.keys()) if isinstance(response, dict) else 'Not a dict'}")
-            if isinstance(response, dict):
-                self.logger.info(f"📝 Translated text: '{response.get('translated_text', 'N/A')}'")
-                self.logger.info(f"📝 Source: '{response.get('source', 'N/A')}'")
+            self.logger.info("✅ ===== FINAL PROMPT GENERATED =====")
+            self.logger.info(f"📝 Prompt length: {len(final_prompt)} characters")
+            self.logger.info(f"📝 Translation memory entries: {len(translation_memory)}")
+            self.logger.info(f"📝 Glossary entries: {len(glossaries)}")
             self.logger.info("==========================================")
             
-            return response
+            # Return the final prompt instead of translation
+            return {
+                "translated_text": "[PROMPT GENERATED - Ready for external translation]",
+                "reasoning": f"Generated final prompt with {len(translation_memory)} TM entries and {len(glossaries)} glossary entries",
+                "cultural_notes": mongo_context.get("cultural_notes", []),
+                "style_applied": mongo_context.get("style_guide", {}),
+                "domain_considerations": f"Domain: {request.get('domain', 'general')}",
+                "full_prompt": final_prompt,
+                "rag_context": {
+                    "translation_memory_count": len(translation_memory),
+                    "glossaries_count": len(glossaries),
+                    "mongo_context_available": bool(mongo_context)
+                },
+                "execution_time": 0.0,
+                "pipeline": "chroma_db_prompt_generation"
+            }
             
         except Exception as e:
             self.logger.error(f"Translation generation failed: {e}")
@@ -347,9 +358,19 @@ class LangChainOrchestrator:
             
             print(f"\n🤖 Translation Result:")
             print(f"   Translated Text: '{final_response.get('translated_text', 'N/A')}'")
-            print(f"   Reasoning: {final_response.get('reasoning', 'N/A')[:200]}...")
-            print(f"   Cultural Notes: {final_response.get('cultural_notes', 'N/A')[:200]}...")
-            print(f"   Style Applied: {final_response.get('style_applied', 'N/A')[:200]}...")
+            print(f"   Reasoning: {str(final_response.get('reasoning', 'N/A'))[:200]}...")
+            
+            cultural_notes = final_response.get('cultural_notes', [])
+            if isinstance(cultural_notes, list):
+                print(f"   Cultural Notes: {len(cultural_notes)} items")
+            else:
+                print(f"   Cultural Notes: {str(cultural_notes)[:200]}...")
+            
+            style_applied = final_response.get('style_applied', {})
+            if isinstance(style_applied, dict):
+                print(f"   Style Applied: {len(style_applied)} items")
+            else:
+                print(f"   Style Applied: {str(style_applied)[:200]}...")
             
             print(f"\n⏱️  Performance:")
             print(f"   Execution Time: {execution_time:.3f}s")
@@ -414,16 +435,14 @@ class LangChainOrchestrator:
                 "formatting_chain"
             ],
             "services": {
-                "qdrant_service": "available" if self.qdrant_service else "missing",
-                "gemini_service": "available" if self.gemini_service else "missing",
+                "retrieval_service": "available" if self.retrieval_service else "missing",
                 "prompt_service": "available" if self.prompt_service else "missing"
             },
             "timestamp": datetime.utcnow().isoformat()
         }
 
-def create_langchain_orchestrator(qdrant_service: HybridRetrievalService,
-                                gemini_service: GeminiService,
+def create_langchain_orchestrator(retrieval_service: Optional[ChromaRetrievalService],
                                 prompt_service: PromptService,
                                 context_service: ContextService) -> LangChainOrchestrator:
     """Factory function to create LangChain orchestrator"""
-    return LangChainOrchestrator(qdrant_service, gemini_service, prompt_service, context_service)
+    return LangChainOrchestrator(retrieval_service, prompt_service, context_service)

@@ -16,15 +16,7 @@ Score = float
 Embedding = List[float]
 Vector = np.ndarray
 
-# Search Types (used by Qdrant client)
-class SearchType(str):
-    """Types of search methods"""
-    VECTOR = "vector"
-    BM25 = "bm25"
-    HYBRID = "hybrid"
-
-
-# Core Data Structure (used by Qdrant client)
+# Core Data Structure (used by vector database clients)
 @dataclass
 class RetrievedDocument:
     """Document retrieved from the knowledge base"""
@@ -33,7 +25,6 @@ class RetrievedDocument:
     metadata: Dict[str, Any]
     score: Score
     embedding: Optional[Embedding] = None
-    retrieval_method: Optional[SearchType] = None
     
     def __post_init__(self):
         """Validate document after initialization"""

@@ -23,23 +23,20 @@ export interface TranslationRequest {
   }>
 }
 
-export interface TranslationResponse {
+export interface PromptGenerationResponse {
   session_id: string
   message_id: string
   timestamp: string
-  translation: string
+  translation: string  // Placeholder text indicating prompt was generated
   reasoning?: string
   cultural_notes?: string
   style_applied?: string
   domain_considerations?: string
-  full_prompt?: string
+  full_prompt: string  // The main output - the generated prompt
   rag_context?: {
-    translation_memory: number
-    glossaries: number
-    mongo_context: {
-      style_guide: string
-      cultural_notes: number
-    }
+    translation_memory_count: number
+    glossaries_count: number
+    mongo_context_available: boolean
   }
   execution_time: number
   pipeline: string
@@ -66,16 +63,16 @@ export interface DataSummary {
     domains: string[]
     languages: string[]
   }
-  qdrant: {
-    points_count: number
-    indexed_vectors_count: number
-    name: string
+  chroma_db: {
+    translation_memory_count: number
+    glossaries_count: number
+    collections: string[]
   }
   total_knowledge: {
     mongodb_documents: number
-    qdrant_documents: number
-    collection_name: string
-    indexed_vectors: number
+    chroma_documents: number
+    translation_memory_entries: number
+    glossary_entries: number
   }
 }
 
@@ -139,21 +136,21 @@ class ApiService {
     return processedAttachments
   }
 
-  async translate(request: TranslationRequest): Promise<TranslationResponse> {
-    return this.request<TranslationResponse>('/chat/translate', {
+  async generatePrompt(request: TranslationRequest): Promise<PromptGenerationResponse> {
+    return this.request<PromptGenerationResponse>('/chat/translate', {
       method: 'POST',
       body: JSON.stringify(request),
     })
   }
 
-  async translateWithImages(
+  async generatePromptWithImages(
     text: string,
     sourceLanguage: string,
     targetLanguage: string,
     domain: string,
     contextNotes?: string,
     attachments?: ImageAttachment[]
-  ): Promise<TranslationResponse> {
+  ): Promise<PromptGenerationResponse> {
     const processedAttachments = await this.processAttachments(attachments)
     
     const request: TranslationRequest = {
@@ -165,7 +162,7 @@ class ApiService {
       attachments: processedAttachments
     }
 
-    return this.translate(request)
+    return this.generatePrompt(request)
   }
 
   async getDataSummary(): Promise<DataSummary> {

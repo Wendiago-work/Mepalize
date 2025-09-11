@@ -12,15 +12,13 @@ import uuid
 from .core.types import Attachment, TranslateReq, RunStatus, RunPass, RunFail
 
 # Import services
-from .services.hybrid_retrieval_service import HybridRetrievalService
-from .services.gemini_service import GeminiService
+from .services.chroma_retrieval_service import ChromaRetrievalService
 from .services.prompt_service import PromptService
 from .services.context_service import ContextService, create_context_service
 from .services.langchain_orchestrator import LangChainOrchestrator, TranslationRequest, TranslationResult
 from .services.ocr_service import get_ocr_service, ocr_image_bytes, extract_text_from_image
 from .database.mongodb_client import create_mongodb_client
-from .database.qdrant_client import QdrantVectorStore
-from .core.model_manager import get_model_manager
+from .database.chroma_client import ChromaVectorStore
 from .core.logger import configure_logging
 from contextlib import asynccontextmanager
 
@@ -32,14 +30,12 @@ print("✅ Logging configured successfully")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan event handler for FastAPI"""
-    global mongodb_client, qdrant_client, context_service, hybrid_retrieval_service, gemini_service, prompt_service, orchestrator, model_manager
+    global mongodb_client, chroma_client, context_service, retrieval_service, prompt_service, orchestrator
     
-    print("🚀 Starting Localized Translator with MongoDB + Qdrant Architecture...")
+    print("🚀 Starting Localized Translator with MongoDB + Chroma DB Architecture...")
     
     try:
-        # Initialize model manager first
-        model_manager = get_model_manager()
-        await model_manager.initialize()
+        # Model manager removed - Chroma DB handles embeddings natively
         
         # Initialize MongoDB
         from .config.config import get_settings
@@ -50,22 +46,40 @@ async def lifespan(app: FastAPI):
         )
         await mongodb_client.initialize()
         
-        # Initialize Qdrant
-        qdrant_client = QdrantVectorStore(collection_name=settings.qdrant_collection_name)
-        await qdrant_client.initialize()
-        await qdrant_client.setup_localization_indexes()
+        # Initialize Chroma DB (if credentials are provided)
+        chroma_client = None
+        print(f"🔍 Debug - Chroma credentials check:")
+        print(f"   API Key: {'✅ Set' if settings.chroma_cloud_api_key else '❌ Empty'}")
+        print(f"   Tenant: {'✅ Set' if settings.chroma_cloud_tenant else '❌ Empty'}")
+        print(f"   Database: {'✅ Set' if settings.chroma_cloud_database else '❌ Empty'}")
+        
+        if all([settings.chroma_cloud_api_key, settings.chroma_cloud_tenant, settings.chroma_cloud_database]):
+            chroma_client = ChromaVectorStore(
+                tm_collection_name=settings.tm_collection_name,
+                glossary_collection_name=settings.glossary_collection_name
+            )
+            await chroma_client.initialize()
+            print("✅ Chroma DB initialized successfully")
+        else:
+            print("⚠️ Chroma DB credentials not provided - skipping Chroma DB initialization")
+            print("   Set CHROMA_API_KEY, CHROMA_TENANT, and CHROMA_DATABASE to enable Chroma DB")
         
         # Initialize services
         context_service = create_context_service(mongodb_client)
-        hybrid_retrieval_service = HybridRetrievalService(qdrant_client)
-        hybrid_retrieval_service.initialize_services()
-        gemini_service = GeminiService()
+        
+        # Initialize retrieval service only if Chroma DB is available
+        retrieval_service = None
+        if chroma_client:
+            retrieval_service = ChromaRetrievalService(chroma_client)
+            print("✅ Retrieval service initialized with Chroma DB")
+        else:
+            print("⚠️ Retrieval service not initialized - Chroma DB not available")
+        
         prompt_service = PromptService()
         
         # Initialize LangChain orchestrator
         orchestrator = LangChainOrchestrator(
-            qdrant_service=hybrid_retrieval_service,
-            gemini_service=gemini_service,
+            retrieval_service=retrieval_service,
             prompt_service=prompt_service,
             context_service=context_service
         )
@@ -91,10 +105,8 @@ async def lifespan(app: FastAPI):
     print("🛑 Shutting down services...")
     if mongodb_client:
         await mongodb_client.close()
-    if qdrant_client:
-        await qdrant_client.close()
-    if model_manager:
-        await model_manager.close()
+    if chroma_client:
+        await chroma_client.close()
 
 app = FastAPI(title="Localized Translator MVP API", lifespan=lifespan)
 
@@ -106,7 +118,7 @@ app.add_middleware(
         "http://127.0.0.1:5173",
         "http://localhost:3000",  
         "http://127.0.0.1:3000",
-        "https://mepalize.vercel.app/"
+        "https://mepalize.vercel.app"
     ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -121,13 +133,11 @@ if os.path.exists(static_dir):
 
 # Global services
 mongodb_client = None
-qdrant_client = None
+chroma_client = None
 context_service = None
-hybrid_retrieval_service = None
-gemini_service = None
+retrieval_service = None
 prompt_service = None
 orchestrator = None
-model_manager = None
 
 AUDIT_DIR = os.environ.get("AUDIT_DIR", os.path.join(os.path.dirname(__file__), "..", "..", "audit"))
 AUDIT_DIR = os.path.abspath(AUDIT_DIR)
@@ -200,7 +210,7 @@ def advance_status(run_id: str, new_status: str, details: Optional[Dict] = None)
     _save_audit(run_id, rec)
 
 async def process_translation_pipeline(run_id: str, request: TranslateReq) -> None:
-    """Process translation using the complete MongoDB + Qdrant pipeline"""
+    """Process translation using the complete MongoDB + Chroma DB pipeline"""
     try:
         print(f"\n🔄 ===== TRANSLATION PIPELINE START =====")
         print(f"📝 Run ID: {run_id}")
@@ -275,7 +285,7 @@ async def process_translation_pipeline(run_id: str, request: TranslateReq) -> No
         rec["history"].append({
             "status": "pass",
             "at": datetime.now(timezone.utc).isoformat(),
-            "pipeline": "mongodb_qdrant_orchestrator",
+            "pipeline": "mongodb_chroma_orchestrator",
             "execution_time": result.execution_time
         })
         _save_audit(run_id, rec)
@@ -304,7 +314,7 @@ async def process_translation_pipeline(run_id: str, request: TranslateReq) -> No
             "status": "fail", 
             "at": datetime.now(timezone.utc).isoformat(),
             "error": str(e),
-            "pipeline": "mongodb_qdrant_orchestrator"
+            "pipeline": "mongodb_chroma_orchestrator"
         })
         rec["history"] = history
         
@@ -367,7 +377,7 @@ async def post_translate(
 @app.post("/chat/translate")
 async def chat_translate(request: TranslateReq):
     """
-    Translation endpoint with MongoDB + Qdrant context and OCR support
+    Translation endpoint with MongoDB + Chroma DB context and OCR support
     
     Supports image attachments in the request. Images will be processed with OCR
     to extract text, which will be combined with the main text for translation.
@@ -454,7 +464,7 @@ async def chat_translate(request: TranslateReq):
             "full_prompt": result.full_prompt,  # Add full_prompt for frontend display
             "rag_context": result.rag_context,
             "execution_time": result.execution_time,
-            "pipeline": "mongodb_qdrant_orchestrator"
+            "pipeline": "mongodb_chroma_orchestrator"
         }
         
         # Debug: Check final response
@@ -577,69 +587,41 @@ def get_run_status(run_id: str):
     }
 
 
-@app.post("/ocr")
-async def ocr(file: UploadFile = File(...), try_cjk_vertical: bool = Query(False)):
-    """OCR endpoint for extracting text from images using Docling + RapidOCR"""
-    try:
-        data = await file.read()
-        text = ocr_image_bytes(data, try_cjk_vertical=try_cjk_vertical)
-        return {
-            "text": text,
-            "filename": file.filename,
-            "file_size": len(data),
-            "cjk_rotation_used": try_cjk_vertical,
-            "extraction_method": "docling_rapidocr"
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"OCR failed: {str(e)}")
-
-
-@app.post("/ocr/base64")
-async def ocr_base64(
-    base64_data: str,
-    filename: str = "unknown",
-    try_cjk_vertical: bool = Query(False)
-):
-    """OCR endpoint for base64-encoded images"""
-    try:
-        ocr_service = get_ocr_service()
-        result = await ocr_service.extract_text_from_image(
-            base64_data, 
-            filename, 
-            try_cjk_vertical=try_cjk_vertical
-        )
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"OCR failed: {str(e)}")
-
-
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
     try:
-        # Check if services are initialized
-        if not all([mongodb_client, qdrant_client, context_service, hybrid_retrieval_service, gemini_service, orchestrator, model_manager]):
-            return {"status": "unhealthy", "message": "Services not initialized"}
+        # Check if core services are initialized
+        if not all([mongodb_client, context_service, prompt_service, orchestrator]):
+            return {"status": "unhealthy", "message": "Core services not initialized"}
         
-        # Get service stats
+        # Get lightweight service health checks (no expensive queries)
         mongodb_stats = await context_service.get_stats()
-        qdrant_stats = await qdrant_client.get_collection_info()
+        
+        # Check optional services
+        chroma_health = {"status": "not_available", "message": "Chroma DB not configured"}
+        retrieval_health = {"retrieval_service": "not_available", "message": "Retrieval service not configured"}
+        
+        if chroma_client:
+            chroma_health = await chroma_client.health_check()
+        
+        if retrieval_service:
+            retrieval_health = await retrieval_service.health_check()
         
         return {
             "status": "healthy",
-            "message": "Localized Translator with MongoDB + Qdrant",
+            "message": "Localized Translator with MongoDB + Chroma DB",
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "services": {
                 "mongodb_client": "initialized",
-                "qdrant_client": "initialized", 
+                "chroma_client": chroma_health.get("status", "not_available"), 
                 "context_service": "initialized",
-                "hybrid_retrieval_service": "initialized",
-                "gemini_service": "initialized",
+                "retrieval_service": retrieval_health.get("retrieval_service", "not_available"),
                 "orchestrator": "initialized",
-                "model_manager": "initialized"
             },
             "mongodb": mongodb_stats,
-            "qdrant": qdrant_stats,
+            "chroma": chroma_health,
+            "retrieval": retrieval_health,
         }
         
     except Exception as e:
@@ -648,24 +630,29 @@ async def health_check():
 
 @app.get("/data/summary")
 async def get_data_summary():
-    """Get summary of available data"""
+    """
+    Get summary of available data
+    
+    WARNING: This endpoint performs expensive database queries (count operations).
+    Only call this when specifically needed for data statistics, not for health checks.
+    """
     try:
-        if not all([context_service, qdrant_client]):
+        if not all([context_service, chroma_client]):
             raise HTTPException(status_code=503, detail="Services not initialized")
         
         # Get combined summary
         mongodb_summary = await context_service.get_stats()
-        qdrant_summary = await qdrant_client.get_collection_info()
+        chroma_summary = await chroma_client.get_collection_info()
   
         return {
             "mongodb": mongodb_summary,
-            "qdrant": qdrant_summary,
+            "chroma": chroma_summary,
             "total_knowledge": {
                 "mongodb_documents": mongodb_summary.get("collections", {}).get("style_guides", 0) + 
                                    mongodb_summary.get("collections", {}).get("cultural_notes", 0),
-                "qdrant_documents": qdrant_summary.get("points_count", 0),
-                "collection_name": qdrant_summary.get("name", "knowledge_base"),
-                "indexed_vectors": qdrant_summary.get("indexed_vectors_count", 0)
+                "chroma_documents": chroma_summary.get("total_documents", 0),
+                "translation_memory": chroma_summary.get("translation_memory", {}).get("count", 0),
+                "glossaries": chroma_summary.get("glossaries", {}).get("count", 0)
             }
         }
         

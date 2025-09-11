@@ -7,11 +7,13 @@ import { Badge } from '@/components/ui/badge'
 interface PromptPreviewProps {
   prompt: string
   isLoading?: boolean
+  error?: string | null
 }
 
 export function PromptPreview({
   prompt,
-  isLoading = false
+  isLoading = false,
+  error = null
 }: PromptPreviewProps) {
   const [copied, setCopied] = useState(false)
 
@@ -23,6 +25,24 @@ export function PromptPreview({
     } catch (err) {
       console.error('Failed to copy prompt:', err)
     }
+  }
+
+  if (error) {
+    return (
+      <Card className="border-destructive">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm flex items-center gap-2 text-destructive">
+            <Eye className="h-4 w-4" />
+            Prompt Generation Error
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
+            {error}
+          </div>
+        </CardContent>
+      </Card>
+    )
   }
 
   if (isLoading) {
@@ -55,7 +75,7 @@ export function PromptPreview({
         </CardHeader>
         <CardContent>
         <div className="text-sm text-muted-foreground">
-          Submit a translation to see the complete prompt that will be sent to the LLM.
+          Submit text to generate a prompt with context from Chroma DB and MongoDB.
 </div>
         </CardContent>
       </Card>
@@ -66,9 +86,9 @@ export function PromptPreview({
     <Card>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-sm flex items-center gap-2">
-            <Eye className="h-4 w-4" />
-            Final Prompt Preview
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Eye className="h-5 w-5" />
+            Generated Prompt
           </CardTitle>
           <Button
             variant="outline"
@@ -108,7 +128,7 @@ export function PromptPreview({
           </div>
           
           <div className="text-xs text-muted-foreground">
-            <p>🔍 <strong>Full Transparency:</strong> This is the complete prompt sent to the LLM, including all context, instructions, and RAG data</p>
+            <p>🔍 <strong>Full Transparency:</strong> This is the complete prompt generated with context from Chroma DB (translation memory & glossaries) and MongoDB (style guides & cultural notes)</p>
           </div>
         </div>
       </CardContent>
