@@ -97,44 +97,6 @@ class ApiService {
     return response.json()
   }
 
-  private async convertImageToBase64(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => {
-        const result = reader.result as string
-        // Remove data:image/...;base64, prefix
-        const base64 = result.split(',')[1]
-        resolve(base64)
-      }
-      reader.onerror = reject
-      reader.readAsDataURL(file)
-    })
-  }
-
-  private async processAttachments(attachments?: ImageAttachment[]): Promise<Array<{
-    type: string
-    base64_data?: string
-    filename?: string
-    mime_type?: string
-    description?: string
-  }>> {
-    if (!attachments || attachments.length === 0) return []
-
-    const processedAttachments = await Promise.all(
-      attachments.map(async (attachment) => {
-        const base64Data = await this.convertImageToBase64(attachment.file)
-        return {
-          type: 'image',
-          base64_data: base64Data,
-          filename: attachment.name,
-          mime_type: attachment.file.type,
-          description: `Image: ${attachment.name} (${Math.round(attachment.size / 1024)}KB)`
-        }
-      })
-    )
-
-    return processedAttachments
-  }
 
   async generatePrompt(request: TranslationRequest): Promise<PromptGenerationResponse> {
     return this.request<PromptGenerationResponse>('/chat/translate', {
@@ -151,18 +113,45 @@ class ApiService {
     contextNotes?: string,
     attachments?: ImageAttachment[]
   ): Promise<PromptGenerationResponse> {
-    const processedAttachments = await this.processAttachments(attachments)
+    const formData = new FormData()
     
-    const request: TranslationRequest = {
-      text,
-      source_language: sourceLanguage,
-      target_language: targetLanguage,
+    // Debug: Log what we're sending
+    console.log('🔍 Frontend sending:', {
+      text: `'${text}'`,
+      sourceLanguage,
+      targetLanguage,
       domain,
-      context_notes: contextNotes,
-      attachments: processedAttachments
+      contextNotes: `'${contextNotes || ''}'`,
+      attachmentsCount: attachments?.length || 0
+    })
+    
+    // Add text fields
+    formData.append('text', text)
+    formData.append('source_language', sourceLanguage)
+    formData.append('target_language', targetLanguage)
+    formData.append('domain', domain)
+    formData.append('context_notes', contextNotes || '')
+    
+    // Add image attachments as files
+    if (attachments && attachments.length > 0) {
+      attachments.forEach(attachment => {
+        formData.append('attachments', attachment.file, attachment.name)
+      })
     }
 
-    return this.generatePrompt(request)
+    const url = `${API_BASE}/chat/translate-multipart`
+    console.log('🔍 Frontend calling URL:', url)
+    const response = await fetch(url, {
+      method: 'POST',
+      body: formData,
+      // Don't set Content-Type header - let browser set it with boundary
+    })
+
+    if (!response.ok) {
+      throw new Error(`API request failed: ${response.statusText}`)
+    }
+
+    return response.json()
   }
 
   async getDataSummary(): Promise<DataSummary> {

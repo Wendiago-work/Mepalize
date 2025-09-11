@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Header, HTTPException, status, BackgroundTasks, UploadFile, File, Query
+from fastapi import FastAPI, Header, HTTPException, status, BackgroundTasks, UploadFile, File, Form, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -114,7 +114,7 @@ settings = get_settings()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
-    allow_credentials=False,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
     allow_origin_regex=r"http://.*:(8000|5173|3000)" 
@@ -368,40 +368,75 @@ async def post_translate(
     return {"runId": run_id, "status": "accepted"}
 
 
-@app.post("/chat/translate")
-async def chat_translate(request: TranslateReq):
+@app.post("/chat/translate-multipart")
+async def chat_translate_multipart(
+    text: str = Form(""),
+    source_language: str = Form("en"),
+    target_language: str = Form("ja"),
+    domain: str = Form("general"),
+    context_notes: str = Form(""),
+    attachments: List[UploadFile] = File([])
+):
+    print("🚀 NEW MULTIPART ENDPOINT CALLED!")
     """
     Translation endpoint with MongoDB + Chroma DB context and OCR support
     
-    Supports image attachments in the request. Images will be processed with OCR
+    Supports image attachments via multipart/form-data. Images will be processed with OCR
     to extract text, which will be combined with the main text for translation.
     """
     session_id = str(uuid.uuid4())
     
+    # Debug: Print all received form data
+    print(f"\n🔍 DEBUG FORM DATA:")
+    print(f"   text: '{text}' (type: {type(text)})")
+    print(f"   source_language: '{source_language}'")
+    print(f"   target_language: '{target_language}'")
+    print(f"   domain: '{domain}'")
+    print(f"   context_notes: '{context_notes}'")
+    print(f"   attachments count: {len(attachments) if attachments else 0}")
+    
+    # Validate that we have either text or attachments
+    if not text.strip() and (not attachments or len(attachments) == 0):
+        raise HTTPException(
+            status_code=400, 
+            detail="Either text or image attachments must be provided"
+        )
+    
     print(f"\n🔄 TRANSLATION REQUEST")
     print(f"==========================================")
     print(f"Session ID: {session_id}")
-    print(f"Text: '{request.text}'")
-    print(f"Source: {request.source_language} → Target: {request.target_language}")
-    print(f"Domain: {request.domain}")
-    print(f"Context: {request.context_notes or 'None'}")
+    print(f"Text: '{text}'")
+    print(f"Source: {source_language} → Target: {target_language}")
+    print(f"Domain: {domain}")
+    print(f"Context: {context_notes or 'None'}")
+    print(f"Attachments: {len(attachments) if attachments else 0}")
     print(f"==========================================\n")
     
     try:
         # Process image attachments with OCR
-        processed_text = request.text
+        processed_text = text
         ocr_context = ""
+        attachment_objects = []
         
-        if request.attachments:
-            print(f"📎 Processing {len(request.attachments)} attachments...")
-            for attachment in request.attachments:
-                if attachment.type == "image" and attachment.base64_data:
-                    print(f"🔍 Processing image: {attachment.filename or 'unknown'}")
+        if attachments:
+            print(f"📎 Processing {len(attachments)} attachments...")
+            for file in attachments:
+                if file.content_type and file.content_type.startswith('image/'):
+                    print(f"🔍 Processing image: {file.filename or 'unknown'}")
                     try:
-                        # Extract text from image using OCR
+                        # Read file bytes
+                        file_bytes = await file.read()
+                        
+                        # Convert to base64 for OCR service (keeping existing OCR interface)
+                        import base64
+                        base64_data = base64.b64encode(file_bytes).decode('utf-8')
+                        mime_type = file.content_type or 'image/jpeg'
+                        base64_with_prefix = f"data:{mime_type};base64,{base64_data}"
+                        
+                        # Extract text from image using OCR (pass only the base64 data, not the data URL)
                         ocr_result = await extract_text_from_image(
-                            attachment.base64_data,
-                            attachment.filename or "unknown",
+                            base64_data,  # Pass only the base64 data, not the data URL
+                            file.filename or "unknown",
                             try_cjk_vertical=True  # Enable CJK vertical text detection
                         )
                         
@@ -411,27 +446,35 @@ async def chat_translate(request: TranslateReq):
                             ocr_context += f"\n{extracted_text}"
                         else:
                             error_msg = ocr_result.get('error', 'Unknown error')
-                            print(f"⚠️ OCR failed for {attachment.filename or 'image'}: {error_msg}")
+                            print(f"⚠️ OCR failed for {file.filename or 'image'}: {error_msg}")
                             print(f"   OCR result: {ocr_result}")
                     except Exception as e:
-                        print(f"❌ OCR error for {attachment.filename or 'image'}: {e}")
+                        print(f"❌ OCR error for {file.filename or 'image'}: {e}")
                         import traceback
                         print(f"   Error details: {traceback.format_exc()}")
                         continue
+                    
+                    # Create attachment object for LangChain request
+                    attachment_objects.append(Attachment(
+                        type="image",
+                        base64_data=base64_with_prefix,
+                        filename=file.filename,
+                        mime_type=file.content_type
+                    ))
             
             # Combine original text with OCR context
             if ocr_context:
-                processed_text = f"{request.text}{ocr_context}"
+                processed_text = f"{text}{ocr_context}"
                 print(f"📝 Combined text with OCR context: {len(processed_text)} characters")
         
         # Convert to LangChain TranslationRequest
         langchain_request = TranslationRequest(
             text=processed_text,
-            source_language=request.source_language,
-            target_language=request.target_language,
-            domain=request.domain,
-            attachments=request.attachments,
-            context_notes=request.context_notes
+            source_language=source_language,
+            target_language=target_language,
+            domain=domain,
+            attachments=attachment_objects,
+            context_notes=context_notes
         )
         
         # Execute translation pipeline
@@ -469,7 +512,7 @@ async def chat_translate(request: TranslateReq):
         
         print(f"   ✅ Translation completed!")
         print(f"   ⏱️  Execution time: {result.execution_time:.3f}s")
-        print(f"   🎯 Context: {request.context_notes or 'Using RAG context'}")
+        print(f"   🎯 Context: {context_notes or 'Using RAG context'}")
         
         return translation_response
         
