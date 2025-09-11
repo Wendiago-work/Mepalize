@@ -42,6 +42,9 @@ class Settings:
         # MongoDB Atlas Settings (Required)
         self.mongo_connection_string: str = os.getenv("MONGO_CONNECTION_STRING", "")
         self.mongo_database: str = os.getenv("MONGO_DATABASE", "LocalizationDB")
+        
+        # Google Gemini Settings
+        self.gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
                 
         
         # Safety Settings - CRITICAL: Keep these enabled for user protection

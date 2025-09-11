@@ -19,7 +19,7 @@ from .services.chroma_retrieval_service import ChromaRetrievalService
 from .services.prompt_service import PromptService
 from .services.context_service import ContextService, create_context_service
 from .services.langchain_orchestrator import LangChainOrchestrator, TranslationRequest, TranslationResult
-from .services.ocr_service import get_ocr_service, ocr_image_bytes, extract_text_from_image
+from .services.gemini_ocr_service import extract_text_from_image_gemini, get_gemini_ocr_service
 from .database.mongodb_client import create_mongodb_client
 from .database.chroma_client import ChromaVectorStore
 from .core.logger import configure_logging
@@ -142,23 +142,6 @@ def generate_run_id() -> str:
     return str(uuid.uuid4())
 
 
-async def warmup_ocr():
-    """Warm up OCR models at startup to avoid first-request delay"""
-    try:
-        import io
-        from PIL import Image, ImageDraw
-        im = Image.new("RGB", (220, 60), "white")
-        d = ImageDraw.Draw(im)
-        d.text((10, 20), "Warmup")
-        buf = io.BytesIO()
-        im.save(buf, "PNG")
-        buf.seek(0)
-        _ = ocr_image_bytes(buf.read(), try_cjk_vertical=False)
-        print("✅ OCR models warmed up successfully")
-    except Exception as e:
-        print(f"⚠️ OCR warmup failed (non-critical): {e}")
-
-
 def write_audit_stub(run_id: str, payload: dict) -> None:
     record = {
         "runId": run_id,
@@ -228,11 +211,10 @@ async def process_translation_pipeline(run_id: str, request: TranslateReq) -> No
                 if attachment.type == "image" and attachment.base64_data:
                     print(f"🔍 Processing image: {attachment.filename or 'unknown'}")
                     try:
-                        # Extract text from image using OCR
-                        ocr_result = await extract_text_from_image(
+                        # Extract text from image using Google Gemini OCR
+                        ocr_result = await extract_text_from_image_gemini(
                             attachment.base64_data,
-                            attachment.filename or "unknown",
-                            try_cjk_vertical=True  # Enable CJK vertical text detection
+                            attachment.filename or "unknown"
                         )
                         
                         if ocr_result["success"] and ocr_result["text"]:
@@ -433,11 +415,10 @@ async def chat_translate_multipart(
                         mime_type = file.content_type or 'image/jpeg'
                         base64_with_prefix = f"data:{mime_type};base64,{base64_data}"
                         
-                        # Extract text from image using OCR (pass only the base64 data, not the data URL)
-                        ocr_result = await extract_text_from_image(
+                        # Extract text from image using Google Gemini OCR
+                        ocr_result = await extract_text_from_image_gemini(
                             base64_data,  # Pass only the base64 data, not the data URL
-                            file.filename or "unknown",
-                            try_cjk_vertical=True  # Enable CJK vertical text detection
+                            file.filename or "unknown"
                         )
                         
                         if ocr_result["success"] and ocr_result["text"]:
