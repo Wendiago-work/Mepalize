@@ -2,26 +2,24 @@ import { CheckCircle, Clock, Brain, Globe, Palette, FileText } from 'lucide-reac
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 
-interface TranslationResult {
-  translation: string
+interface PromptGenerationResult {
+  translation: string  // Placeholder text indicating prompt was generated
   reasoning?: string
   cultural_notes?: string
   style_applied?: string
   domain_considerations?: string
+  full_prompt: string  // The main output - the generated prompt
   rag_context?: {
-    translation_memory: number
-    glossaries: number
-    mongo_context: {
-      style_guide: string
-      cultural_notes: number
-    }
+    translation_memory_count: number
+    glossaries_count: number
+    mongo_context_available: boolean
   }
   execution_time?: number
-  confidence?: number
+  pipeline?: string
 }
 
 interface TranslationResultProps {
-  result: TranslationResult | null
+  result: PromptGenerationResult | null
   isLoading?: boolean
   error?: string | null
 }
@@ -37,13 +35,13 @@ export function TranslationResult({
         <CardHeader className="pb-3">
           <CardTitle className="text-sm flex items-center gap-2">
             <CheckCircle className="h-4 w-4" />
-            Translation Result
+            Prompt Generation
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <div className="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
-            Processing translation...
+            Generating prompt with context...
           </div>
         </CardContent>
       </Card>
@@ -56,7 +54,7 @@ export function TranslationResult({
         <CardHeader className="pb-3">
           <CardTitle className="text-sm flex items-center gap-2 text-destructive">
             <CheckCircle className="h-4 w-4" />
-            Translation Error
+            Prompt Generation Error
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -74,12 +72,12 @@ export function TranslationResult({
         <CardHeader className="pb-3">
           <CardTitle className="text-sm flex items-center gap-2">
             <CheckCircle className="h-4 w-4" />
-            Translation Result
+            Prompt Generation
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="text-sm text-muted-foreground">
-            Submit a translation to see the result here.
+            Submit text to generate a prompt with context here.
           </div>
         </CardContent>
       </Card>
@@ -92,7 +90,7 @@ export function TranslationResult({
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm flex items-center gap-2">
             <CheckCircle className="h-4 w-4" />
-            Translation Result
+            Prompt Generated
           </CardTitle>
           <div className="flex items-center gap-2">
             {result.execution_time && (
@@ -101,20 +99,20 @@ export function TranslationResult({
                 {result.execution_time.toFixed(2)}s
               </Badge>
             )}
-            {result.confidence && (
+            {result.pipeline && (
               <Badge variant="secondary" className="text-xs">
-                {(result.confidence * 100).toFixed(1)}% confidence
+                {result.pipeline}
               </Badge>
             )}
           </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Main Translation */}
+        {/* Prompt Generation Status */}
         <div className="space-y-2">
           <h4 className="text-sm font-medium flex items-center gap-2">
             <FileText className="h-4 w-4" />
-            Translation
+            Status
           </h4>
           <div className="bg-muted/30 p-4 rounded-md">
             <p className="text-sm text-foreground leading-relaxed">
@@ -128,7 +126,7 @@ export function TranslationResult({
           <div className="space-y-2">
             <h4 className="text-sm font-medium flex items-center gap-2">
               <Brain className="h-4 w-4" />
-              Translation Reasoning
+              Generation Details
             </h4>
             <div className="bg-muted/30 p-3 rounded-md">
               <p className="text-sm text-foreground leading-relaxed">
@@ -192,10 +190,9 @@ export function TranslationResult({
             <h4 className="text-sm font-medium">Retrieved Context</h4>
             <div className="bg-muted/30 p-3 rounded-md">
               <div className="text-sm text-muted-foreground leading-relaxed space-y-1">
-                <p>• Translation Memory: {result.rag_context.translation_memory} items</p>
-                <p>• Glossaries: {result.rag_context.glossaries} items</p>
-                <p>• Style Guide: {result.rag_context.mongo_context?.style_guide || 'Not available'}</p>
-                <p>• Cultural Notes: {result.rag_context.mongo_context?.cultural_notes || 0} items</p>
+                <p>• Translation Memory: {result.rag_context.translation_memory_count} items</p>
+                <p>• Glossaries: {result.rag_context.glossaries_count} items</p>
+                <p>• MongoDB Context: {result.rag_context.mongo_context_available ? 'Available' : 'Not available'}</p>
               </div>
             </div>
           </div>

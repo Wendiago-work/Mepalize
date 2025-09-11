@@ -8,24 +8,23 @@ import { Badge } from '@/components/ui/badge'
 import { LanguageSelector } from '@/components/translation/LanguageSelector'
 import { DomainSelector } from '@/components/translation/DomainSelector'
 import { TranslationForm } from '@/components/translation/TranslationForm'
-import { TranslationResult } from '@/components/translation/TranslationResult'
 import { CulturalNotes } from '@/components/context/CulturalNotes'
 import { StyleGuide } from '@/components/context/StyleGuide'
 import { PromptPreview } from '@/components/context/PromptPreview'
 
 // Import API service
 import { apiService } from '@/services/api'
-import type { TranslationResponse, CulturalNote, StyleGuide as StyleGuideType, ImageAttachment } from '@/services/api'
+import type { PromptGenerationResponse, CulturalNote, StyleGuide as StyleGuideType, ImageAttachment } from '@/services/api'
 
 import './App.css'
 
 function App() {
-  // Translation state
+  // Prompt generation state
   const [sourceLanguage, setSourceLanguage] = useState('en')
   const [targetLanguage, setTargetLanguage] = useState('ja')
   const [domain, setDomain] = useState('Game - Music')
-  const [isTranslating, setIsTranslating] = useState(false)
-  const [translationResult, setTranslationResult] = useState<TranslationResponse | null>(null)
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [promptResult, setPromptResult] = useState<PromptGenerationResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   // Context state
@@ -69,13 +68,13 @@ function App() {
     }
   }
 
-  const handleTranslation = async (text: string, contextNotes?: string, attachments?: ImageAttachment[]) => {
-    setIsTranslating(true)
+  const handlePromptGeneration = async (text: string, contextNotes?: string, attachments?: ImageAttachment[]) => {
+    setIsGenerating(true)
     setError(null)
-    setTranslationResult(null)
+    setPromptResult(null)
 
     try {
-      const result = await apiService.translateWithImages(
+      const result = await apiService.generatePromptWithImages(
         text,
         sourceLanguage,
         targetLanguage,
@@ -83,16 +82,16 @@ function App() {
         contextNotes,
         attachments
       )
-      setTranslationResult(result)
+      setPromptResult(result)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Translation failed')
+      setError(err instanceof Error ? err.message : 'Prompt generation failed')
     } finally {
-      setIsTranslating(false)
+      setIsGenerating(false)
     }
   }
 
-  const clearTranslation = () => {
-    setTranslationResult(null)
+  const clearPrompt = () => {
+    setPromptResult(null)
     setError(null)
   }
 
@@ -108,7 +107,7 @@ function App() {
               </div>
               <div>
                 <CardTitle className="text-xl">Mepalize</CardTitle>
-                <p className="text-sm text-muted-foreground">AI-powered translation with cultural context</p>
+                <p className="text-sm text-muted-foreground">AI-powered prompt generation with cultural context</p>
               </div>
             </div>
             <div className="flex items-center space-x-2">
@@ -122,7 +121,7 @@ function App() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={clearTranslation}
+                onClick={clearPrompt}
               >
                 <RotateCcw className="h-4 w-4 mr-2" />
                 Clear
@@ -141,12 +140,12 @@ function App() {
               targetLanguage={targetLanguage}
               onSourceChange={setSourceLanguage}
               onTargetChange={setTargetLanguage}
-              disabled={isTranslating}
+              disabled={isGenerating}
             />
             <DomainSelector
               domain={domain}
               onDomainChange={setDomain}
-              disabled={isTranslating}
+              disabled={isGenerating}
             />
           </div>
         </div>
@@ -154,12 +153,12 @@ function App() {
 
       {/* Main Content */}
       <div className="container mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left Column - Input and Context */}
           <div className="space-y-6">
             <TranslationForm
-              onSubmit={handleTranslation}
-              isLoading={isTranslating}
+              onSubmit={handlePromptGeneration}
+              isLoading={isGenerating}
               disabled={systemStatus !== 'healthy'}
             />
             
@@ -177,20 +176,12 @@ function App() {
             />
           </div>
 
-          {/* Center Column - Results */}
-          <div className="space-y-6">
-            <TranslationResult
-              result={translationResult}
-              isLoading={isTranslating}
-              error={error}
-            />
-          </div>
-
-          {/* Right Column - Prompt Preview */}
+          {/* Right Column - Final Prompt */}
           <div className="space-y-6">
             <PromptPreview
-              prompt={translationResult?.full_prompt || ''}
-              isLoading={isTranslating}
+              prompt={promptResult?.full_prompt || ''}
+              isLoading={isGenerating}
+              error={error}
             />
           </div>
         </div>
@@ -200,7 +191,7 @@ function App() {
       <div className="border-t bg-card">
         <div className="container mx-auto px-4 py-3">
           <div className="text-xs text-muted-foreground text-center">
-            <p>Powered by Gemini Pro • Enhanced with RAG • Built with React & FastAPI</p>
+            <p>Powered by Chroma DB • Enhanced with RAG • Built with React & FastAPI</p>
           </div>
         </div>
       </div>

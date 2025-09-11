@@ -195,7 +195,7 @@ class LogManager:
         # Set specific logger levels
         logging.getLogger("httpx").setLevel(logging.WARNING)
         logging.getLogger("openai").setLevel(logging.INFO)
-        logging.getLogger("qdrant_client").setLevel(logging.INFO)
+        logging.getLogger("chroma_client").setLevel(logging.INFO)
         logging.getLogger("asyncio").setLevel(logging.WARNING)
         
         self._configured = True

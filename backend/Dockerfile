@@ -20,9 +20,9 @@ RUN pip install --no-cache-dir uv && \
     pip uninstall -y opencv-python -y && \
     pip install --no-cache-dir --force-reinstall opencv-python-headless==4.11.0.86
 
-# ---- Warm up RapidOCR models during build (no cold start in prod) ----
-# Note: Warmup disabled due to OpenCV GUI dependencies in container
-# Models will be downloaded on first use
+# ---- Models and Dependencies ----
+# RapidOCR models will be downloaded on first use
+# Chroma DB handles embeddings natively - no local models needed
 
 # Copy application code
 COPY . .
@@ -40,6 +40,4 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:${PORT:-10000}/health || exit 1
 
 # Start the application
-# Note: MongoDB connection should be provided via environment variables
-# or configuration file for cloud MongoDB integration
 CMD ["sh", "-c", "uvicorn src.main:app --host 0.0.0.0 --port ${PORT:-10000} --workers 2"]
